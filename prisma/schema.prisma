@@ -8,29 +8,50 @@ datasource db {
 }
 
 model User {
-  id            Int      @id @default(autoincrement())
-  phoneNumber   String   @unique
+  id            Int            @id @default(autoincrement())
+  phoneNumber   String         @unique
   password      String
   fullName      String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   refreshTokens RefreshToken[]
+  qrCodes       QrCode[]
 }
 
 model RefreshToken {
-  id          Int      @id @default(autoincrement())
-  token       String   @unique
-  userId      Int
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  deviceName  String?
-  deviceType  String?  // mobile, desktop, tablet
-  ipAddress   String?
-  userAgent   String?
-  isRevoked   Boolean  @default(false)
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         Int      @id @default(autoincrement())
+  token      String   @unique
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceName String?
+  deviceType String? // mobile, desktop, tablet
+  ipAddress  String?
+  userAgent  String?
+  isRevoked  Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([userId])
 }
 
+enum QrCodeStatus {
+  pending
+  scanned
+  confirmed
+  expired
+  cancelled
+}
+
+model QrCode {
+  id        String       @id @default(cuid())
+  qrToken   String       @unique
+  userId    Int?
+  user      User?        @relation(fields: [userId], references: [id])
+  status    QrCodeStatus @default(pending) // pending, scanned, confirmed, expired, cancelled
+  expiresAt DateTime
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([userId])
+}
