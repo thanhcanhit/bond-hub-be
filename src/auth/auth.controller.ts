@@ -10,14 +10,15 @@ import { AuthService } from './auth.service';
 import { Request } from 'express';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('register')
-  async register(@Body() registerDto: RegisterDto) {
-    return this.authService.register({
+  @Post('register/initiate')
+  async initiateRegistration(@Body() registerDto: RegisterDto) {
+    return this.authService.initiateRegistration({
       email: registerDto.email,
       phoneNumber: registerDto.phoneNumber,
       password: registerDto.password,
@@ -25,6 +26,14 @@ export class AuthController {
       dateOfBirth: registerDto.dateOfBirth,
       gender: registerDto.gender,
     });
+  }
+
+  @Post('register/verify')
+  async verifyAndRegister(@Body() verifyOtpDto: VerifyOtpDto) {
+    return this.authService.verifyOtpAndRegister(
+      verifyOtpDto.registrationId,
+      verifyOtpDto.otp,
+    );
   }
 
   @Post('login')

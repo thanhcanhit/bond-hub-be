@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
+import { CacheService } from '../cache/cache.service';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { Gender } from '@prisma/client';
@@ -14,6 +16,8 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private mailService: MailService,
+    private cacheService: CacheService,
   ) {}
 
   async login(phoneNumber: string, password: string, deviceInfo: any) {
@@ -96,7 +100,11 @@ export class AuthService {
     });
   }
 
-  async register(data: {
+  private generateOtp(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
+  async initiateRegistration(data: {
     email?: string;
     phoneNumber?: string;
     password: string;
@@ -127,6 +135,55 @@ export class AuthService {
       );
     }
 
+    // Generate OTP and registration ID
+    const otp = this.generateOtp();
+    const registrationId = uuidv4();
+
+    // Store registration data and OTP in Redis
+    await this.cacheService.set(
+      `registration:${registrationId}`,
+      JSON.stringify(data),
+      60, // 1 minute expiry
+    );
+    await this.cacheService.set(
+      `otp:${registrationId}`,
+      otp,
+      60, // 1 minute expiry
+    );
+
+    // Send OTP via email if email is provided
+    if (data.email) {
+      const emailSent = await this.mailService.sendOtpEmail(data.email, otp);
+      if (!emailSent) {
+        throw new BadRequestException('Failed to send OTP email');
+      }
+    }
+    // TODO: Implement SMS OTP sending when available
+
+    return {
+      message: 'OTP sent successfully',
+      registrationId,
+    };
+  }
+
+  async verifyOtpAndRegister(registrationId: string, otp: string) {
+    // Get stored OTP and registration data
+    const storedOtp = await this.cacheService.get(`otp:${registrationId}`);
+    const registrationData = await this.cacheService.get(
+      `registration:${registrationId}`,
+    );
+
+    if (!storedOtp || !registrationData) {
+      throw new BadRequestException('Registration session expired');
+    }
+
+    if (storedOtp !== otp) {
+      throw new BadRequestException('Invalid OTP');
+    }
+
+    // Parse registration data
+    const data = JSON.parse(registrationData);
+
     // Hash password
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
@@ -148,6 +205,10 @@ export class AuthService {
         userInfo: true,
       },
     });
+
+    // Clean up Redis data
+    await this.cacheService.del(`otp:${registrationId}`);
+    await this.cacheService.del(`registration:${registrationId}`);
 
     return {
       id: user.id,
