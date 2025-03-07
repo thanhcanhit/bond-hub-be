@@ -19,6 +19,9 @@ export class AuthService {
     // Find user
     const user = await this.prisma.user.findUnique({
       where: { phoneNumber },
+      include: {
+        userInfo: true,
+      },
     });
 
     if (!user) {
@@ -26,7 +29,7 @@ export class AuthService {
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -40,12 +43,12 @@ export class AuthService {
       user: {
         id: user.id,
         phoneNumber: user.phoneNumber,
-        fullName: user.fullName,
+        fullName: user.userInfo?.fullName,
       },
     };
   }
 
-  private async generateTokens(userId: number, deviceInfo: any) {
+  private async generateTokens(userId: string, deviceInfo: any) {
     const accessToken = this.jwtService.sign({ sub: userId });
     const refreshToken = uuidv4();
     const refreshTokenExpiry = new Date();
@@ -105,19 +108,26 @@ export class AuthService {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user with userInfo
     const user = await this.prisma.user.create({
       data: {
         phoneNumber,
-        password: hashedPassword,
-        fullName,
+        passwordHash: hashedPassword,
+        userInfo: {
+          create: {
+            fullName,
+          },
+        },
+      },
+      include: {
+        userInfo: true,
       },
     });
 
     return {
       id: user.id,
       phoneNumber: user.phoneNumber,
-      fullName: user.fullName,
+      fullName: user.userInfo?.fullName,
     };
   }
 }
