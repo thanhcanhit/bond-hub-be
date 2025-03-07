@@ -265,11 +265,13 @@ async function createPostsAndReactions(users: any[]) {
         postId: createdPost.id,
         userId: users[Math.floor(Math.random() * users.length)].id,
         reactionType: ReactionType.LIKE,
+        reactedAt: new Date(),
       },
       {
         postId: createdPost.id,
         userId: users[Math.floor(Math.random() * users.length)].id,
         reactionType: ReactionType.LOVE,
+        reactedAt: new Date(),
       },
     ];
 
@@ -323,7 +325,12 @@ async function createPostsAndReactions(users: any[]) {
 
     for (const comment of selectedComments) {
       await prisma.comment.create({
-        data: comment,
+        data: {
+          postId: comment.postId,
+          userId: comment.userId,
+          content: comment.content,
+          reactions: comment.reactions,
+        },
       });
     }
   }
@@ -408,6 +415,9 @@ async function createMessages(users: any[]) {
       },
       messageType: MessageType.USER,
       readBy: [users[0].id],
+      recalled: false,
+      deletedBy: [],
+      reactions: [],
     },
     {
       senderId: users[1].id,
@@ -417,6 +427,9 @@ async function createMessages(users: any[]) {
       },
       messageType: MessageType.USER,
       readBy: [users[0].id, users[1].id],
+      recalled: false,
+      deletedBy: [],
+      reactions: [],
     },
     {
       senderId: users[0].id,
@@ -424,6 +437,9 @@ async function createMessages(users: any[]) {
       content: { text: 'Có ai đi cùng càng vui. 2h chiều thứ 7 nhé!' },
       messageType: MessageType.USER,
       readBy: [users[0].id],
+      recalled: false,
+      deletedBy: [],
+      reactions: [],
     },
     {
       senderId: users[2].id,
@@ -433,6 +449,9 @@ async function createMessages(users: any[]) {
       },
       messageType: MessageType.USER,
       readBy: [users[2].id, users[3].id],
+      recalled: false,
+      deletedBy: [],
+      reactions: [],
     },
     {
       senderId: users[3].id,
@@ -443,6 +462,9 @@ async function createMessages(users: any[]) {
       },
       messageType: MessageType.USER,
       readBy: [users[2].id, users[3].id],
+      recalled: false,
+      deletedBy: [],
+      reactions: [],
     },
   ];
 
@@ -471,6 +493,9 @@ async function createMessages(users: any[]) {
           },
           messageType: MessageType.GROUP,
           readBy: members.map((m) => m.userId),
+          recalled: false,
+          deletedBy: [],
+          reactions: [],
         },
         {
           senderId: members[1].userId,
@@ -480,6 +505,9 @@ async function createMessages(users: any[]) {
           },
           messageType: MessageType.GROUP,
           readBy: [members[0].userId, members[1].userId],
+          recalled: false,
+          deletedBy: [],
+          reactions: [],
         },
         {
           senderId: members[0].userId,
@@ -489,6 +517,9 @@ async function createMessages(users: any[]) {
           },
           messageType: MessageType.GROUP,
           readBy: members.slice(0, 3).map((m) => m.userId),
+          recalled: false,
+          deletedBy: [],
+          reactions: [],
         },
       ],
       'Phượt Thủ Sài Gòn': [
@@ -500,6 +531,9 @@ async function createMessages(users: any[]) {
           },
           messageType: MessageType.GROUP,
           readBy: members.map((m) => m.userId),
+          recalled: false,
+          deletedBy: [],
+          reactions: [],
         },
         {
           senderId: members[1].userId,
@@ -509,6 +543,9 @@ async function createMessages(users: any[]) {
           },
           messageType: MessageType.GROUP,
           readBy: [members[0].userId, members[1].userId],
+          recalled: false,
+          deletedBy: [],
+          reactions: [],
         },
         {
           senderId: members[0].userId,
@@ -518,6 +555,9 @@ async function createMessages(users: any[]) {
           },
           messageType: MessageType.GROUP,
           readBy: members.slice(0, 3).map((m) => m.userId),
+          recalled: false,
+          deletedBy: [],
+          reactions: [],
         },
       ],
       'CLB Sách & Cà Phê Hà Nội': [
@@ -529,6 +569,9 @@ async function createMessages(users: any[]) {
           },
           messageType: MessageType.GROUP,
           readBy: members.map((m) => m.userId),
+          recalled: false,
+          deletedBy: [],
+          reactions: [],
         },
         {
           senderId: members[1].userId,
@@ -538,6 +581,9 @@ async function createMessages(users: any[]) {
           },
           messageType: MessageType.GROUP,
           readBy: [members[0].userId, members[1].userId],
+          recalled: false,
+          deletedBy: [],
+          reactions: [],
         },
         {
           senderId: members[0].userId,
@@ -547,6 +593,9 @@ async function createMessages(users: any[]) {
           },
           messageType: MessageType.GROUP,
           readBy: members.slice(0, 3).map((m) => m.userId),
+          recalled: false,
+          deletedBy: [],
+          reactions: [],
         },
       ],
     };
@@ -584,6 +633,7 @@ async function createNotifications(users: any[]) {
         )?.id,
       },
       read: false,
+      createdAt: new Date(),
     },
     {
       userId: users[1].id,
@@ -602,6 +652,7 @@ async function createNotifications(users: any[]) {
         )?.id,
       },
       read: true,
+      createdAt: new Date(),
     },
     {
       userId: users[2].id,
@@ -626,6 +677,7 @@ async function createNotifications(users: any[]) {
         )?.id,
       },
       read: false,
+      createdAt: new Date(),
     },
     {
       userId: users[4].id,
@@ -644,6 +696,7 @@ async function createNotifications(users: any[]) {
         )?.id,
       },
       read: false,
+      createdAt: new Date(),
     },
     {
       userId: users[3].id,
@@ -661,12 +714,20 @@ async function createNotifications(users: any[]) {
         id: 'event-123',
       },
       read: true,
+      createdAt: new Date(),
     },
   ];
 
   for (const notification of notifications) {
     await prisma.notification.create({
-      data: notification,
+      data: {
+        userId: notification.userId,
+        type: notification.type,
+        content: notification.content,
+        reference: notification.reference,
+        read: notification.read !== undefined ? notification.read : false,
+        createdAt: notification.createdAt || new Date(),
+      },
     });
   }
 }

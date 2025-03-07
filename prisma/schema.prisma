@@ -16,7 +16,7 @@ model User {
   createdAt        DateTime       @default(now()) @map("created_at")
   updatedAt        DateTime       @updatedAt @map("updated_at")
   userInfo         UserInfo?      @relation(name: "UserToUserInfo")
-  infoId           String?        @map("info_id")
+  infoId           String?        @map("info_id") @db.Uuid
   refreshTokens    RefreshToken[] @relation(name: "RefreshTokenToUser")
   qrCodes          QrCode[]       @relation(name: "QrCodeToUser")
   posts            Post[]         @relation(name: "PostToUser")
@@ -61,9 +61,9 @@ model UserInfo {
 model Friend {
   id        String       @id @default(uuid()) @map("friendship_id") @db.Uuid
   userOne   User         @relation(name: "UserOne", fields: [userOneId], references: [id])
-  userOneId String       @map("user_id_1")
+  userOneId String       @map("user_id_1") @db.Uuid
   userTwo   User         @relation(name: "UserTwo", fields: [userTwoId], references: [id])
-  userTwoId String       @map("user_id_2")
+  userTwoId String       @map("user_id_2") @db.Uuid
   status    FriendStatus @default(PENDING)
   createdAt DateTime     @default(now()) @map("created_at")
   updatedAt DateTime     @updatedAt @map("updated_at")
@@ -73,7 +73,7 @@ model Friend {
 
 model UserSetting {
   id                  String   @id @default(uuid()) @map("setting_id") @db.Uuid
-  userId              String   @map("user_id")
+  userId              String   @map("user_id") @db.Uuid
   user                User     @relation(name: "UserToUserSetting", fields: [userId], references: [id])
   notificationEnabled Boolean  @default(true) @map("notification_enabled")
   darkMode            Boolean  @default(false) @map("dark_mode")
@@ -84,7 +84,7 @@ model UserSetting {
 
 model Post {
   id           String         @id @default(uuid()) @map("post_id") @db.Uuid
-  userId       String         @map("user_id")
+  userId       String         @map("user_id") @db.Uuid
   user         User           @relation(name: "PostToUser", fields: [userId], references: [id])
   content      String?
   media        Json?
@@ -100,7 +100,7 @@ model Post {
 
 model Story {
   id        String   @id @default(uuid()) @map("story_id") @db.Uuid
-  userId    String   @map("user_id")
+  userId    String   @map("user_id") @db.Uuid
   user      User     @relation(name: "StoryToUser", fields: [userId], references: [id])
   mediaUrl  String   @map("media_url")
   expiresAt DateTime @map("expires_at")
@@ -112,7 +112,7 @@ model Story {
 model Group {
   id        String        @id @default(uuid()) @map("group_id") @db.Uuid
   name      String        @map("group_name")
-  creatorId String        @map("creator_id")
+  creatorId String        @map("creator_id") @db.Uuid
   avatarUrl String?       @map("avatar_url")
   createdAt DateTime      @default(now()) @map("created_at")
   members   GroupMember[] @relation(name: "GroupToGroupMember")
@@ -123,21 +123,21 @@ model Group {
 
 model GroupMember {
   id        String    @id @default(uuid()) @map("membership_id") @db.Uuid
-  groupId   String    @map("group_id")
+  groupId   String    @map("group_id") @db.Uuid
   group     Group     @relation(name: "GroupToGroupMember", fields: [groupId], references: [id])
-  userId    String    @map("user_id")
+  userId    String    @map("user_id") @db.Uuid
   user      User      @relation(name: "GroupMemberToUser", fields: [userId], references: [id])
   role      GroupRole @default(MEMBER)
   joinedAt  DateTime  @default(now()) @map("joined_at")
   addedBy   User      @relation(name: "AddedBy", fields: [addedById], references: [id])
-  addedById String    @map("added_by_id")
+  addedById String    @map("added_by_id") @db.Uuid
 
   @@map("group_members")
 }
 
 model CloudStorage {
   id         String   @id @default(uuid()) @map("file_id") @db.Uuid
-  userId     String   @map("user_id")
+  userId     String   @map("user_id") @db.Uuid
   user       User     @relation(name: "CloudStorageToUser", fields: [userId], references: [id])
   fileName   String   @map("file_name")
   fileUrl    String   @map("file_url")
@@ -150,10 +150,10 @@ model CloudStorage {
 
 model PinnedItem {
   id       String      @id @default(uuid()) @map("pinned_id") @db.Uuid
-  userId   String      @map("user_id")
+  userId   String      @map("user_id") @db.Uuid
   user     User        @relation(name: "PinnedItemToUser", fields: [userId], references: [id])
   itemType MessageType @map("item_type")
-  itemId   String      @map("item_id")
+  itemId   String      @map("item_id") @db.Uuid
   pinnedAt DateTime    @default(now()) @map("pinned_at")
 
   @@map("pinned_items")
@@ -161,9 +161,9 @@ model PinnedItem {
 
 model Contact {
   id            String   @id @default(uuid()) @map("contact_id") @db.Uuid
-  userId        String   @map("user_id")
+  userId        String   @map("user_id") @db.Uuid
   user          User     @relation(name: "UserContacts", fields: [userId], references: [id])
-  contactUserId String   @map("contact_user_id")
+  contactUserId String   @map("contact_user_id") @db.Uuid
   contactUser   User     @relation(name: "ContactUser", fields: [contactUserId], references: [id])
   nickname      String?
   addedAt       DateTime @default(now()) @map("added_at")
@@ -173,9 +173,9 @@ model Contact {
 
 model PostReaction {
   id           String       @id @default(uuid()) @map("reaction_id") @db.Uuid
-  postId       String       @map("post_id")
+  postId       String       @map("post_id") @db.Uuid
   post         Post         @relation(name: "PostToPostReaction", fields: [postId], references: [id])
-  userId       String       @map("user_id")
+  userId       String       @map("user_id") @db.Uuid
   user         User         @relation(name: "PostReactionToUser", fields: [userId], references: [id])
   reactionType ReactionType @map("reaction_type")
   reactedAt    DateTime     @default(now()) @map("reacted_at")
@@ -185,9 +185,9 @@ model PostReaction {
 
 model HiddenPost {
   id       String   @id @default(uuid()) @map("hidden_post_id") @db.Uuid
-  userId   String   @map("user_id")
+  userId   String   @map("user_id") @db.Uuid
   user     User     @relation(name: "HiddenPostToUser", fields: [userId], references: [id])
-  postId   String   @map("post_id")
+  postId   String   @map("post_id") @db.Uuid
   post     Post     @relation(name: "HiddenPostToPost", fields: [postId], references: [id])
   hiddenAt DateTime @default(now()) @map("hidden_at")
 
@@ -197,7 +197,7 @@ model HiddenPost {
 model RefreshToken {
   id         String      @id @default(uuid()) @map("refresh_token_id") @db.Uuid
   token      String      @unique
-  userId     String      @map("user_id")
+  userId     String      @map("user_id") @db.Uuid
   user       User        @relation(name: "RefreshTokenToUser", fields: [userId], references: [id], onDelete: Cascade)
   deviceName String?     @map("device_name")
   deviceType DeviceType? @map("device_type")
@@ -215,7 +215,7 @@ model RefreshToken {
 model QrCode {
   id        String       @id @default(uuid()) @map("qr_token_id") @db.Uuid
   qrToken   String       @unique @map("qr_token")
-  userId    String?      @map("user_id")
+  userId    String?      @map("user_id") @db.Uuid
   user      User?        @relation(name: "QrCodeToUser", fields: [userId], references: [id])
   status    QrCodeStatus @default(PENDING)
   expiresAt DateTime     @map("expires_at")
@@ -228,7 +228,7 @@ model QrCode {
 
 model Notification {
   id        String   @id @default(uuid()) @map("notification_id") @db.Uuid
-  userId    String   @map("user_id")
+  userId    String   @map("user_id") @db.Uuid
   user      User     @relation(name: "NotificationToUser", fields: [userId], references: [id])
   type      String   @map("notification_type")
   content   Json     @map("notification_content")
@@ -242,15 +242,15 @@ model Notification {
 model Message {
   id          String       @id @default(uuid()) @map("message_id") @db.Uuid
   content     Json         @map("content")
-  senderId    String       @map("sender_id")
+  senderId    String       @map("sender_id") @db.Uuid
   sender      User         @relation(name: "SentMessage", fields: [senderId], references: [id])
-  receiverId  String?      @map("receiver_id")
+  receiverId  String?      @map("receiver_id") @db.Uuid
   receiver    User?        @relation(name: "ReceivedMessage", fields: [receiverId], references: [id])
-  groupId     String?      @map("group_id")
+  groupId     String?      @map("group_id") @db.Uuid
   group       Group?       @relation(name: "GroupMessages", fields: [groupId], references: [id])
   recalled    Boolean      @default(false) @map("is_recalled")
   deletedBy   String[]     @map("deleted_by")
-  repliedTo   String?      @map("replied_to")
+  repliedTo   String?      @map("replied_to") @db.Uuid
   reactions   Json[]       @map("reactions")
   readBy      String[]     @map("read_by")
   createdAt   DateTime     @default(now()) @map("created_at")
@@ -262,12 +262,12 @@ model Message {
 
 model Comment {
   id        String  @id @default(uuid()) @map("comment_id") @db.Uuid
-  postId    String  @map("post_id")
+  postId    String  @map("post_id") @db.Uuid
   post      Post    @relation(name: "CommentToPost", fields: [postId], references: [id])
-  userId    String  @map("user_id")
+  userId    String  @map("user_id") @db.Uuid
   user      User    @relation(name: "CommentToUser", fields: [userId], references: [id])
   content   String  @map("content")
-  repliedTo String? @map("replied_to")
+  repliedTo String? @map("replied_to") @db.Uuid
   reactions Json[]  @map("reactions")
 
   @@map("comments")
