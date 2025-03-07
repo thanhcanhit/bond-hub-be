@@ -16,7 +16,7 @@ export class QrCodeCleanupTask {
 
     // Xóa các mã QR đã hết hạn
     const result = await this.prisma.qrCode.deleteMany({
-      where: { expiresAt: { lt: now }, status: { not: 'confirmed' } },
+      where: { expiresAt: { lt: now }, status: { not: 'CONFIRMED' } },
     });
 
     this.logger.debug(`Deleted ${result.count} expired QR Codes.`);

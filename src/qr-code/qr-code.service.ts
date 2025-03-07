@@ -19,7 +19,7 @@ export class QrCodeService {
     const qrCode = await this.prisma.qrCode.create({
       data: {
         qrToken,
-        status: QrCodeStatus.pending,
+        status: QrCodeStatus.PENDING,
         expiresAt,
       },
     });
@@ -39,12 +39,12 @@ export class QrCodeService {
   }
 
   // Quét mã QR
-  async scanQrCode(qrToken: string, userId: number) {
+  async scanQrCode(qrToken: string, userId: string) {
     const qrCode = await this.prisma.qrCode.findUnique({ where: { qrToken } });
 
     if (
       !qrCode ||
-      qrCode.status !== QrCodeStatus.pending ||
+      qrCode.status !== QrCodeStatus.PENDING ||
       new Date() > qrCode.expiresAt
     ) {
       throw new Error('QR Code is invalid or expired');
@@ -52,22 +52,22 @@ export class QrCodeService {
 
     await this.prisma.qrCode.update({
       where: { qrToken },
-      data: { status: QrCodeStatus.scanned, userId },
+      data: { status: QrCodeStatus.SCANNED, userId },
     });
 
     // Gửi cập nhật trạng thái qua WebSocket
-    this.qrCodeGateway.sendQrStatus(qrToken, QrCodeStatus.scanned);
+    this.qrCodeGateway.sendQrStatus(qrToken, QrCodeStatus.SCANNED);
 
-    return { status: QrCodeStatus.scanned };
+    return { status: QrCodeStatus.SCANNED };
   }
 
   // Xác nhận đăng nhập
-  async confirmQrCode(qrToken: string, userId: number) {
+  async confirmQrCode(qrToken: string, userId: string) {
     const qrCode = await this.prisma.qrCode.findUnique({ where: { qrToken } });
 
     if (
       !qrCode ||
-      qrCode.status !== QrCodeStatus.scanned ||
+      qrCode.status !== QrCodeStatus.SCANNED ||
       new Date() > qrCode.expiresAt
     ) {
       throw new Error('QR Code is invalid or expired');
@@ -75,16 +75,16 @@ export class QrCodeService {
 
     await this.prisma.qrCode.update({
       where: { qrToken },
-      data: { status: QrCodeStatus.confirmed, userId },
+      data: { status: QrCodeStatus.CONFIRMED, userId },
     });
 
     // Gửi cập nhật trạng thái qua WebSocket
-    this.qrCodeGateway.sendQrStatus(qrToken, QrCodeStatus.confirmed);
+    this.qrCodeGateway.sendQrStatus(qrToken, QrCodeStatus.CONFIRMED);
 
     // Xóa mã QR sau khi xác nhận
     await this.deleteQrCode(qrToken);
 
-    return { status: QrCodeStatus.confirmed };
+    return { status: QrCodeStatus.CONFIRMED };
   }
 
   // Hủy mã QR
@@ -98,16 +98,16 @@ export class QrCodeService {
     // Cập nhật trạng thái thành "cancelled"
     await this.prisma.qrCode.update({
       where: { qrToken },
-      data: { status: QrCodeStatus.cancelled },
+      data: { status: QrCodeStatus.CANCELLED },
     });
 
     // Gửi cập nhật trạng thái qua WebSocket
-    this.qrCodeGateway.sendQrStatus(qrToken, QrCodeStatus.cancelled);
+    this.qrCodeGateway.sendQrStatus(qrToken, QrCodeStatus.CANCELLED);
 
     // Xóa mã QR sau khi hủy
     await this.deleteQrCode(qrToken);
 
-    return { status: QrCodeStatus.cancelled };
+    return { status: QrCodeStatus.CANCELLED };
   }
 
   // Xóa mã QR khỏi cơ sở dữ liệu
