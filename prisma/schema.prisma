@@ -9,7 +9,7 @@ generator client {
 }
 
 model User {
-  id               String         @id @default(uuid()) @map("user_id")
+  id               String         @id @default(uuid()) @map("user_id") @db.Uuid
   email            String?        @unique
   phoneNumber      String?        @unique
   passwordHash     String         @map("password_hash")
@@ -41,7 +41,7 @@ model User {
 }
 
 model UserInfo {
-  id                String    @id @default(uuid()) @map("info_id")
+  id                String    @id @default(uuid()) @map("info_id") @db.Uuid
   fullName          String?   @map("full_name")
   dateOfBirth       DateTime? @map("date_of_birth")
   gender            Gender?
@@ -59,7 +59,7 @@ model UserInfo {
 }
 
 model Friend {
-  id        String       @id @default(uuid()) @map("friendship_id")
+  id        String       @id @default(uuid()) @map("friendship_id") @db.Uuid
   userOne   User         @relation(name: "UserOne", fields: [userOneId], references: [id])
   userOneId String       @map("user_id_1")
   userTwo   User         @relation(name: "UserTwo", fields: [userTwoId], references: [id])
@@ -72,7 +72,7 @@ model Friend {
 }
 
 model UserSetting {
-  id                  String   @id @default(uuid()) @map("setting_id")
+  id                  String   @id @default(uuid()) @map("setting_id") @db.Uuid
   userId              String   @map("user_id")
   user                User     @relation(name: "UserToUserSetting", fields: [userId], references: [id])
   notificationEnabled Boolean  @default(true) @map("notification_enabled")
@@ -83,7 +83,7 @@ model UserSetting {
 }
 
 model Post {
-  id           String         @id @default(uuid()) @map("post_id")
+  id           String         @id @default(uuid()) @map("post_id") @db.Uuid
   userId       String         @map("user_id")
   user         User           @relation(name: "PostToUser", fields: [userId], references: [id])
   content      String?
@@ -99,7 +99,7 @@ model Post {
 }
 
 model Story {
-  id        String   @id @default(uuid()) @map("story_id")
+  id        String   @id @default(uuid()) @map("story_id") @db.Uuid
   userId    String   @map("user_id")
   user      User     @relation(name: "StoryToUser", fields: [userId], references: [id])
   mediaUrl  String   @map("media_url")
@@ -110,7 +110,7 @@ model Story {
 }
 
 model Group {
-  id        String        @id @default(uuid()) @map("group_id")
+  id        String        @id @default(uuid()) @map("group_id") @db.Uuid
   name      String        @map("group_name")
   creatorId String        @map("creator_id")
   avatarUrl String?       @map("avatar_url")
@@ -122,7 +122,7 @@ model Group {
 }
 
 model GroupMember {
-  id        String    @id @default(uuid()) @map("membership_id")
+  id        String    @id @default(uuid()) @map("membership_id") @db.Uuid
   groupId   String    @map("group_id")
   group     Group     @relation(name: "GroupToGroupMember", fields: [groupId], references: [id])
   userId    String    @map("user_id")
@@ -136,7 +136,7 @@ model GroupMember {
 }
 
 model CloudStorage {
-  id         String   @id @default(uuid()) @map("file_id")
+  id         String   @id @default(uuid()) @map("file_id") @db.Uuid
   userId     String   @map("user_id")
   user       User     @relation(name: "CloudStorageToUser", fields: [userId], references: [id])
   fileName   String   @map("file_name")
@@ -149,7 +149,7 @@ model CloudStorage {
 }
 
 model PinnedItem {
-  id       String      @id @default(uuid()) @map("pinned_id")
+  id       String      @id @default(uuid()) @map("pinned_id") @db.Uuid
   userId   String      @map("user_id")
   user     User        @relation(name: "PinnedItemToUser", fields: [userId], references: [id])
   itemType MessageType @map("item_type")
@@ -160,7 +160,7 @@ model PinnedItem {
 }
 
 model Contact {
-  id            String   @id @default(uuid()) @map("contact_id")
+  id            String   @id @default(uuid()) @map("contact_id") @db.Uuid
   userId        String   @map("user_id")
   user          User     @relation(name: "UserContacts", fields: [userId], references: [id])
   contactUserId String   @map("contact_user_id")
@@ -172,7 +172,7 @@ model Contact {
 }
 
 model PostReaction {
-  id           String       @id @default(uuid()) @map("reaction_id")
+  id           String       @id @default(uuid()) @map("reaction_id") @db.Uuid
   postId       String       @map("post_id")
   post         Post         @relation(name: "PostToPostReaction", fields: [postId], references: [id])
   userId       String       @map("user_id")
@@ -184,7 +184,7 @@ model PostReaction {
 }
 
 model HiddenPost {
-  id       String   @id @default(uuid()) @map("hidden_post_id")
+  id       String   @id @default(uuid()) @map("hidden_post_id") @db.Uuid
   userId   String   @map("user_id")
   user     User     @relation(name: "HiddenPostToUser", fields: [userId], references: [id])
   postId   String   @map("post_id")
@@ -195,7 +195,7 @@ model HiddenPost {
 }
 
 model RefreshToken {
-  id         String      @id @default(uuid()) @map("refresh_token_id")
+  id         String      @id @default(uuid()) @map("refresh_token_id") @db.Uuid
   token      String      @unique
   userId     String      @map("user_id")
   user       User        @relation(name: "RefreshTokenToUser", fields: [userId], references: [id], onDelete: Cascade)
@@ -213,7 +213,7 @@ model RefreshToken {
 }
 
 model QrCode {
-  id        String       @id @default(cuid())
+  id        String       @id @default(uuid()) @map("qr_token_id") @db.Uuid
   qrToken   String       @unique @map("qr_token")
   userId    String?      @map("user_id")
   user      User?        @relation(name: "QrCodeToUser", fields: [userId], references: [id])
@@ -227,7 +227,7 @@ model QrCode {
 }
 
 model Notification {
-  id        String   @id @default(uuid()) @map("notification_id")
+  id        String   @id @default(uuid()) @map("notification_id") @db.Uuid
   userId    String   @map("user_id")
   user      User     @relation(name: "NotificationToUser", fields: [userId], references: [id])
   type      String   @map("notification_type")
@@ -240,7 +240,7 @@ model Notification {
 }
 
 model Message {
-  id          String       @id @default(uuid())
+  id          String       @id @default(uuid()) @map("message_id") @db.Uuid
   content     Json         @map("content")
   senderId    String       @map("sender_id")
   sender      User         @relation(name: "SentMessage", fields: [senderId], references: [id])
@@ -261,7 +261,7 @@ model Message {
 }
 
 model Comment {
-  id        String  @id @default(uuid())
+  id        String  @id @default(uuid()) @map("comment_id") @db.Uuid
   postId    String  @map("post_id")
   post      Post    @relation(name: "CommentToPost", fields: [postId], references: [id])
   userId    String  @map("user_id")
