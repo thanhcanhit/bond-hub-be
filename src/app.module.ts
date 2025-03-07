@@ -5,7 +5,7 @@ import { UserModule } from './user/user.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
-import { QrCodeModule } from './qr-code/qr-code.module';
+// import { QrCodeModule } from './qr-code/qr-code.module';
 
 @Module({
   imports: [
@@ -15,7 +15,7 @@ import { QrCodeModule } from './qr-code/qr-code.module';
     UserModule,
     PrismaModule,
     AuthModule,
-    QrCodeModule,
+    // QrCodeModule,
   ],
   controllers: [AppController],
   providers: [AppService],
