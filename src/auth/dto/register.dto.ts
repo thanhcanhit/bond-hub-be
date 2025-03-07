@@ -1,12 +1,26 @@
-import { IsString, IsNotEmpty, MinLength, Matches } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  MinLength,
+  Matches,
+  IsEmail,
+  IsOptional,
+  IsEnum,
+  IsDateString,
+} from 'class-validator';
+import { Gender } from '@prisma/client';
 
 export class RegisterDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @Matches(/^[0-9]{10}$/, {
     message: 'Phone number must be exactly 10 digits',
   })
-  phoneNumber: string;
+  phoneNumber?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -16,4 +30,12 @@ export class RegisterDto {
   @IsString()
   @IsNotEmpty()
   fullName: string;
+
+  @IsDateString()
+  @IsNotEmpty()
+  dateOfBirth: string;
+
+  @IsEnum(Gender)
+  @IsNotEmpty()
+  gender: Gender;
 }

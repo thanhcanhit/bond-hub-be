@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
+import { Gender } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -95,27 +96,51 @@ export class AuthService {
     });
   }
 
-  async register(phoneNumber: string, password: string, fullName: string) {
-    // Check if user exists
-    const existingUser = await this.prisma.user.findUnique({
-      where: { phoneNumber },
+  async register(data: {
+    email?: string;
+    phoneNumber?: string;
+    password: string;
+    fullName: string;
+    dateOfBirth: string;
+    gender: Gender;
+  }) {
+    // Check if at least email or phone number is provided
+    if (!data.email && !data.phoneNumber) {
+      throw new BadRequestException('Either email or phone number is required');
+    }
+
+    // Check if user exists with either email or phone number
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: data.email || undefined },
+          { phoneNumber: data.phoneNumber || undefined },
+        ],
+      },
     });
 
     if (existingUser) {
-      throw new BadRequestException('Phone number already registered');
+      throw new BadRequestException(
+        existingUser.email === data.email
+          ? 'Email already registered'
+          : 'Phone number already registered',
+      );
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(data.password, 10);
 
     // Create user with userInfo
     const user = await this.prisma.user.create({
       data: {
-        phoneNumber,
+        email: data.email,
+        phoneNumber: data.phoneNumber,
         passwordHash: hashedPassword,
         userInfo: {
           create: {
-            fullName,
+            fullName: data.fullName,
+            dateOfBirth: new Date(data.dateOfBirth),
+            gender: data.gender,
           },
         },
       },
@@ -126,8 +151,11 @@ export class AuthService {
 
     return {
       id: user.id,
+      email: user.email,
       phoneNumber: user.phoneNumber,
       fullName: user.userInfo?.fullName,
+      dateOfBirth: user.userInfo?.dateOfBirth,
+      gender: user.userInfo?.gender,
     };
   }
 }

@@ -17,11 +17,14 @@ export class AuthController {
 
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
-    return this.authService.register(
-      registerDto.phoneNumber,
-      registerDto.password,
-      registerDto.fullName,
-    );
+    return this.authService.register({
+      email: registerDto.email,
+      phoneNumber: registerDto.phoneNumber,
+      password: registerDto.password,
+      fullName: registerDto.fullName,
+      dateOfBirth: registerDto.dateOfBirth,
+      gender: registerDto.gender,
+    });
   }
 
   @Post('login')
