@@ -11,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { InitiateRegistrationDto } from './dto/initiate-registration.dto';
 import { CompleteRegistrationDto } from './dto/complete-registration.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -236,6 +237,111 @@ export class AuthService {
         dateOfBirth: user.userInfo?.dateOfBirth,
         gender: user.userInfo?.gender,
       },
+    };
+  }
+
+  async initiateForgotPassword(data: ForgotPasswordDto) {
+    // Check if at least email or phone number is provided
+    if (!data.email && !data.phoneNumber) {
+      throw new BadRequestException('Either email or phone number is required');
+    }
+
+    // Find user by email or phone number
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: data.email || undefined },
+          { phoneNumber: data.phoneNumber || undefined },
+        ],
+      },
+      include: {
+        userInfo: true,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    // Generate OTP and reset ID
+    const otp = this.generateOtp();
+    const resetId = uuidv4();
+
+    // Store reset data and OTP in Redis
+    await this.cacheService.set(
+      `reset:${resetId}`,
+      JSON.stringify({
+        userId: user.id,
+        phoneNumber: user.phoneNumber,
+        email: user.email,
+      }),
+      300, // 5 minutes expiry
+    );
+    await this.cacheService.set(
+      `reset_otp:${resetId}`,
+      otp,
+      300, // 5 minutes expiry
+    );
+
+    // Send OTP via email if email exists
+    if (user.email) {
+      const emailSent = await this.mailService.sendOtpEmail(user.email, otp);
+      if (!emailSent) {
+        throw new BadRequestException('Failed to send OTP email');
+      }
+    }
+    // TODO: Implement SMS OTP sending when available
+
+    return {
+      message: 'OTP sent successfully',
+      resetId,
+    };
+  }
+
+  async verifyForgotPasswordOtp(resetId: string, otp: string) {
+    // Get stored OTP and reset data
+    const storedOtp = await this.cacheService.get(`reset_otp:${resetId}`);
+    const resetData = await this.cacheService.get(`reset:${resetId}`);
+
+    if (!storedOtp || !resetData) {
+      throw new BadRequestException('Reset session expired');
+    }
+
+    if (storedOtp !== otp) {
+      throw new BadRequestException('Invalid OTP');
+    }
+
+    return {
+      message: 'OTP verified successfully',
+      resetId,
+    };
+  }
+
+  async resetPassword(resetId: string, newPassword: string) {
+    // Get reset data
+    const resetData = await this.cacheService.get(`reset:${resetId}`);
+
+    if (!resetData) {
+      throw new BadRequestException('Reset session expired');
+    }
+
+    const { userId } = JSON.parse(resetData);
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update user password
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: hashedPassword },
+    });
+
+    // Clean up Redis data
+    await this.cacheService.del(`reset_otp:${resetId}`);
+    await this.cacheService.del(`reset:${resetId}`);
+
+    return {
+      message: 'Password reset successfully',
     };
   }
 }

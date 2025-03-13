@@ -12,6 +12,9 @@ import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { InitiateRegistrationDto } from './dto/initiate-registration.dto';
 import { CompleteRegistrationDto } from './dto/complete-registration.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { VerifyForgotPasswordOtpDto } from './dto/verify-forgot-password-otp.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -65,5 +68,26 @@ export class AuthController {
       throw new UnauthorizedException('Refresh token is required');
     }
     return this.authService.logout(refreshToken);
+  }
+
+  @Post('forgot-password')
+  async initiateForgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.initiateForgotPassword(forgotPasswordDto);
+  }
+
+  @Post('forgot-password/verify')
+  async verifyForgotPasswordOtp(@Body() verifyDto: VerifyForgotPasswordOtpDto) {
+    return this.authService.verifyForgotPasswordOtp(
+      verifyDto.resetId,
+      verifyDto.otp,
+    );
+  }
+
+  @Post('forgot-password/reset')
+  async resetPassword(@Body() resetDto: ResetPasswordDto) {
+    return this.authService.resetPassword(
+      resetDto.resetId,
+      resetDto.newPassword,
+    );
   }
 }
