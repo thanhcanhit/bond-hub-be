@@ -2,25 +2,15 @@ import {
   IsString,
   IsNotEmpty,
   MinLength,
-  Matches,
-  IsEmail,
-  IsOptional,
   IsEnum,
   IsDateString,
 } from 'class-validator';
 import { Gender } from '@prisma/client';
 
-export class RegisterDto {
-  @IsOptional()
+export class CompleteRegistrationDto {
   @IsString()
-  @Matches(/^[0-9]{10}$/, {
-    message: 'Phone number must be exactly 10 digits',
-  })
-  phoneNumber?: string;
-
-  @IsOptional()
-  @IsEmail()
-  email?: string;
+  @IsNotEmpty()
+  registrationId: string;
 
   @IsString()
   @IsNotEmpty()

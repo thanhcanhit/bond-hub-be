@@ -9,4 +9,4 @@ export class VerifyOtpDto {
   @IsString()
   @IsNotEmpty()
   registrationId: string;
-} 
+}

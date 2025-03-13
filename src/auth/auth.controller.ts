@@ -8,32 +8,31 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Request } from 'express';
-import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { InitiateRegistrationDto } from './dto/initiate-registration.dto';
+import { CompleteRegistrationDto } from './dto/complete-registration.dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register/initiate')
-  async initiateRegistration(@Body() registerDto: RegisterDto) {
-    return this.authService.initiateRegistration({
-      email: registerDto.email,
-      phoneNumber: registerDto.phoneNumber,
-      password: registerDto.password,
-      fullName: registerDto.fullName,
-      dateOfBirth: registerDto.dateOfBirth,
-      gender: registerDto.gender,
-    });
+  async initiateRegistration(@Body() initiateDto: InitiateRegistrationDto) {
+    return this.authService.initiateRegistration(initiateDto);
   }
 
   @Post('register/verify')
-  async verifyAndRegister(@Body() verifyOtpDto: VerifyOtpDto) {
-    return this.authService.verifyOtpAndRegister(
+  async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
+    return this.authService.verifyOtp(
       verifyOtpDto.registrationId,
       verifyOtpDto.otp,
     );
+  }
+
+  @Post('register/complete')
+  async completeRegistration(@Body() completeDto: CompleteRegistrationDto) {
+    return this.authService.completeRegistration(completeDto);
   }
 
   @Post('login')
