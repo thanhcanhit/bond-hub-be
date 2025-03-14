@@ -23,6 +23,7 @@
     "seed": "prisma db seed"
   },
   "dependencies": {
+    "@nestjs/cache-manager": "^3.0.0",
     "@nestjs/common": "^11.0.9",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.9",
@@ -35,12 +36,16 @@
     "@nestjs/swagger": "^11.0.3",
     "@nestjs/websockets": "^11.0.9",
     "@prisma/client": "^6.2.1",
+    "@redis/client": "^1.6.0",
     "bcrypt": "^5.1.1",
+    "cache-manager": "^6.4.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
+    "redis": "^4.7.0",
     "reflect-metadata": "^0.2.2",
+    "resend": "^4.1.2",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.1",
     "uuid": "^11.0.5"
