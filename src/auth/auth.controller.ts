@@ -5,6 +5,7 @@ import {
   Headers,
   Req,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Request } from 'express';
@@ -40,18 +41,19 @@ export class AuthController {
 
   @Post('login')
   async login(@Body() loginDto: LoginDto, @Req() request: Request) {
+    if (!loginDto.email && !loginDto.phoneNumber) {
+      throw new BadRequestException('Either email or phone number is required');
+    }
+
     const deviceInfo = {
       deviceName: request.headers['x-device-name'],
-      deviceType: request.headers['x-device-type'],
+      deviceType: loginDto.deviceType,
       ipAddress: request.ip,
       userAgent: request.headers['user-agent'],
     };
 
-    return this.authService.login(
-      loginDto.phoneNumber,
-      loginDto.password,
-      deviceInfo,
-    );
+    const identifier = loginDto.email || loginDto.phoneNumber;
+    return this.authService.login(identifier, loginDto.password, deviceInfo);
   }
 
   @Post('refresh')
