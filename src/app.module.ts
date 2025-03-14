@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
 import { GroupModule } from './group/group.module';
 import { QrCodeModule } from './qr-code/qr-code.module';
+import { MessageModule } from './message/message.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { QrCodeModule } from './qr-code/qr-code.module';
     AuthModule,
     QrCodeModule,
     GroupModule,
+    MessageModule,
   ],
   controllers: [AppController],
   providers: [AppService],
