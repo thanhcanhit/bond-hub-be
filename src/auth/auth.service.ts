@@ -53,10 +53,22 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Check for existing active sessions on mobile/tablet devices
+    // Check for existing device session
+    let existingSession = null;
+    if (deviceInfo.deviceId) {
+      existingSession = user.refreshTokens.find(
+        (token) =>
+          token.deviceName === deviceInfo.deviceName &&
+          token.deviceType === deviceInfo.deviceType &&
+          !token.isRevoked,
+      );
+    }
+
+    // Handle mobile/tablet device restrictions
     if (
-      deviceInfo.deviceType === 'MOBILE' ||
-      deviceInfo.deviceType === 'TABLET'
+      (deviceInfo.deviceType === 'MOBILE' ||
+        deviceInfo.deviceType === 'TABLET') &&
+      !existingSession
     ) {
       const activeTokens = user.refreshTokens.filter(
         (token) =>
@@ -89,6 +101,7 @@ export class AuthService {
     // Generate tokens
     const tokens = await this.generateTokens(user.id, deviceInfo);
 
+    // Return user info and tokens
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
@@ -97,6 +110,11 @@ export class AuthService {
         email: user.email,
         phoneNumber: user.phoneNumber,
         fullName: user.userInfo?.fullName,
+      },
+      device: {
+        id: tokens.deviceId,
+        name: deviceInfo.deviceName,
+        type: deviceInfo.deviceType,
       },
     };
   }
@@ -111,8 +129,9 @@ export class AuthService {
     const refreshTokenExpiry = new Date();
     refreshTokenExpiry.setDate(refreshTokenExpiry.getDate() + 30);
 
-    await this.prisma.refreshToken.create({
+    const refreshTokenRecord = await this.prisma.refreshToken.create({
       data: {
+        id: uuidv4(),
         token: refreshToken,
         userId,
         deviceName: deviceInfo.deviceName,
@@ -123,26 +142,43 @@ export class AuthService {
       },
     });
 
-    return { accessToken, refreshToken };
+    return {
+      accessToken,
+      refreshToken,
+      deviceId: refreshTokenRecord.id,
+    };
   }
 
-  async refreshAccessToken(refreshToken: string) {
-    const tokenRecord = await this.prisma.refreshToken.findUnique({
-      where: { token: refreshToken },
+  async refreshAccessToken(refreshToken: string, deviceId: string) {
+    const tokenRecord = await this.prisma.refreshToken.findFirst({
+      where: {
+        token: refreshToken,
+        id: deviceId,
+        isRevoked: false,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
       include: { user: true },
     });
 
-    if (
-      !tokenRecord ||
-      tokenRecord.isRevoked ||
-      tokenRecord.expiresAt < new Date()
-    ) {
+    if (!tokenRecord) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const accessToken = this.jwtService.sign({ sub: tokenRecord.userId });
+    const accessToken = this.jwtService.sign({
+      sub: tokenRecord.userId,
+      deviceType: tokenRecord.deviceType,
+    });
 
-    return { accessToken };
+    return {
+      accessToken,
+      device: {
+        id: tokenRecord.id,
+        name: tokenRecord.deviceName,
+        type: tokenRecord.deviceType,
+      },
+    };
   }
 
   async logout(refreshToken: string) {

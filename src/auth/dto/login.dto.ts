@@ -4,17 +4,20 @@ import {
   IsOptional,
   IsEmail,
   Matches,
+  IsEnum,
+  ValidateIf,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { DeviceType } from '@prisma/client';
 
 export class LoginDto {
-  @IsOptional()
   @IsEmail()
+  @ValidateIf((o) => !o.phoneNumber)
   @Transform(({ value }) => (value ? value.toLowerCase() : value))
   email?: string;
 
-  @IsOptional()
   @IsString()
+  @ValidateIf((o) => !o.email)
   @Matches(/^[0-9]{10}$/, {
     message: 'Phone number must be exactly 10 digits',
   })
@@ -25,6 +28,13 @@ export class LoginDto {
   password: string;
 
   @IsString()
-  @IsNotEmpty()
-  deviceType: 'MOBILE' | 'TABLET' | 'DESKTOP' | 'OTHER';
+  @IsOptional()
+  deviceName?: string;
+
+  @IsEnum(DeviceType)
+  deviceType: DeviceType;
+
+  @IsString()
+  @IsOptional()
+  deviceId?: string; // Unique identifier for the device if available
 }

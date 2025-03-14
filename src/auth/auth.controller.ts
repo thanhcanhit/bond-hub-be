@@ -16,6 +16,7 @@ import { CompleteRegistrationDto } from './dto/complete-registration.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { VerifyForgotPasswordOtpDto } from './dto/verify-forgot-password-otp.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -57,11 +58,11 @@ export class AuthController {
   }
 
   @Post('refresh')
-  async refreshToken(@Headers('refresh-token') refreshToken: string) {
-    if (!refreshToken) {
-      throw new UnauthorizedException('Refresh token is required');
-    }
-    return this.authService.refreshAccessToken(refreshToken);
+  async refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.refreshAccessToken(
+      refreshTokenDto.refreshToken,
+      refreshTokenDto.deviceId,
+    );
   }
 
   @Post('logout')
