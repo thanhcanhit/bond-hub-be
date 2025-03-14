@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { CacheService } from '../cache/cache.service';
+import { AuthGateway } from './auth.gateway';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { InitiateRegistrationDto } from './dto/initiate-registration.dto';
@@ -20,14 +21,25 @@ export class AuthService {
     private jwtService: JwtService,
     private mailService: MailService,
     private cacheService: CacheService,
+    private authGateway: AuthGateway,
   ) {}
 
-  async login(phoneNumber: string, password: string, deviceInfo: any) {
-    // Find user
-    const user = await this.prisma.user.findUnique({
-      where: { phoneNumber },
+  async login(identifier: string, password: string, deviceInfo: any) {
+    // Find user by email or phone number
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ email: identifier }, { phoneNumber: identifier }],
+      },
       include: {
         userInfo: true,
+        refreshTokens: {
+          where: {
+            isRevoked: false,
+            expiresAt: {
+              gt: new Date(),
+            },
+          },
+        },
       },
     });
 
@@ -41,28 +53,85 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Check for existing device session
+    let existingSession = null;
+    if (deviceInfo.deviceId) {
+      existingSession = user.refreshTokens.find(
+        (token) =>
+          token.deviceName === deviceInfo.deviceName &&
+          token.deviceType === deviceInfo.deviceType &&
+          !token.isRevoked,
+      );
+    }
+
+    // Handle mobile/tablet device restrictions
+    if (
+      (deviceInfo.deviceType === 'MOBILE' ||
+        deviceInfo.deviceType === 'TABLET') &&
+      !existingSession
+    ) {
+      const activeTokens = user.refreshTokens.filter(
+        (token) =>
+          (token.deviceType === 'MOBILE' || token.deviceType === 'TABLET') &&
+          !token.isRevoked,
+      );
+
+      // Revoke all existing mobile/tablet tokens
+      if (activeTokens.length > 0) {
+        await this.prisma.refreshToken.updateMany({
+          where: {
+            userId: user.id,
+            deviceType: {
+              in: ['MOBILE', 'TABLET'],
+            },
+            isRevoked: false,
+          },
+          data: {
+            isRevoked: true,
+          },
+        });
+
+        // Notify connected devices about logout
+        for (const token of activeTokens) {
+          await this.authGateway.notifyDeviceLogout(user.id, token.id);
+        }
+      }
+    }
+
     // Generate tokens
     const tokens = await this.generateTokens(user.id, deviceInfo);
 
+    // Return user info and tokens
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       user: {
         id: user.id,
+        email: user.email,
         phoneNumber: user.phoneNumber,
         fullName: user.userInfo?.fullName,
+      },
+      device: {
+        id: tokens.deviceId,
+        name: deviceInfo.deviceName,
+        type: deviceInfo.deviceType,
       },
     };
   }
 
   private async generateTokens(userId: string, deviceInfo: any) {
-    const accessToken = this.jwtService.sign({ sub: userId });
+    const accessToken = this.jwtService.sign({
+      sub: userId,
+      deviceType: deviceInfo.deviceType,
+    });
+
     const refreshToken = uuidv4();
     const refreshTokenExpiry = new Date();
     refreshTokenExpiry.setDate(refreshTokenExpiry.getDate() + 30);
 
-    await this.prisma.refreshToken.create({
+    const refreshTokenRecord = await this.prisma.refreshToken.create({
       data: {
+        id: uuidv4(),
         token: refreshToken,
         userId,
         deviceName: deviceInfo.deviceName,
@@ -73,26 +142,43 @@ export class AuthService {
       },
     });
 
-    return { accessToken, refreshToken };
+    return {
+      accessToken,
+      refreshToken,
+      deviceId: refreshTokenRecord.id,
+    };
   }
 
-  async refreshAccessToken(refreshToken: string) {
-    const tokenRecord = await this.prisma.refreshToken.findUnique({
-      where: { token: refreshToken },
+  async refreshAccessToken(refreshToken: string, deviceId: string) {
+    const tokenRecord = await this.prisma.refreshToken.findFirst({
+      where: {
+        token: refreshToken,
+        id: deviceId,
+        isRevoked: false,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
       include: { user: true },
     });
 
-    if (
-      !tokenRecord ||
-      tokenRecord.isRevoked ||
-      tokenRecord.expiresAt < new Date()
-    ) {
+    if (!tokenRecord) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const accessToken = this.jwtService.sign({ sub: tokenRecord.userId });
+    const accessToken = this.jwtService.sign({
+      sub: tokenRecord.userId,
+      deviceType: tokenRecord.deviceType,
+    });
 
-    return { accessToken };
+    return {
+      accessToken,
+      device: {
+        id: tokenRecord.id,
+        name: tokenRecord.deviceName,
+        type: tokenRecord.deviceType,
+      },
+    };
   }
 
   async logout(refreshToken: string) {
