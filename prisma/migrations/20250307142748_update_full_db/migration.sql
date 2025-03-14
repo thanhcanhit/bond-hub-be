@@ -21,20 +21,20 @@ CREATE TYPE "ReactionType" AS ENUM ('LIKE', 'LOVE', 'HAHA', 'WOW', 'SAD', 'ANGRY
 
 -- CreateTable
 CREATE TABLE "users" (
-    "user_id" TEXT NOT NULL,
+    "user_id" UUID NOT NULL,
     "email" TEXT,
     "phoneNumber" TEXT,
     "password_hash" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
-    "info_id" TEXT,
+    "info_id" UUID,
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("user_id")
 );
 
 -- CreateTable
 CREATE TABLE "user_infors" (
-    "info_id" TEXT NOT NULL,
+    "info_id" UUID NOT NULL,
     "full_name" TEXT,
     "date_of_birth" TIMESTAMP(3),
     "gender" "Gender",
@@ -52,9 +52,9 @@ CREATE TABLE "user_infors" (
 
 -- CreateTable
 CREATE TABLE "friends" (
-    "friendship_id" TEXT NOT NULL,
-    "user_id_1" TEXT NOT NULL,
-    "user_id_2" TEXT NOT NULL,
+    "friendship_id" UUID NOT NULL,
+    "user_id_1" UUID NOT NULL,
+    "user_id_2" UUID NOT NULL,
     "status" "FriendStatus" NOT NULL DEFAULT 'PENDING',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
@@ -64,8 +64,8 @@ CREATE TABLE "friends" (
 
 -- CreateTable
 CREATE TABLE "user_settings" (
-    "setting_id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
+    "setting_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
     "notification_enabled" BOOLEAN NOT NULL DEFAULT true,
     "dark_mode" BOOLEAN NOT NULL DEFAULT false,
     "last_updated" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -75,8 +75,8 @@ CREATE TABLE "user_settings" (
 
 -- CreateTable
 CREATE TABLE "posts" (
-    "post_id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
+    "post_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
     "content" TEXT,
     "media" JSONB,
     "privacy_level" TEXT NOT NULL DEFAULT 'public',
@@ -88,8 +88,8 @@ CREATE TABLE "posts" (
 
 -- CreateTable
 CREATE TABLE "stories" (
-    "story_id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
+    "story_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
     "media_url" TEXT NOT NULL,
     "expires_at" TIMESTAMP(3) NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -99,9 +99,9 @@ CREATE TABLE "stories" (
 
 -- CreateTable
 CREATE TABLE "groups" (
-    "group_id" TEXT NOT NULL,
+    "group_id" UUID NOT NULL,
     "group_name" TEXT NOT NULL,
-    "creator_id" TEXT NOT NULL,
+    "creator_id" UUID NOT NULL,
     "avatar_url" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -110,20 +110,20 @@ CREATE TABLE "groups" (
 
 -- CreateTable
 CREATE TABLE "group_members" (
-    "membership_id" TEXT NOT NULL,
-    "group_id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
+    "membership_id" UUID NOT NULL,
+    "group_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
     "role" "GroupRole" NOT NULL DEFAULT 'MEMBER',
     "joined_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "added_by_id" TEXT NOT NULL,
+    "added_by_id" UUID NOT NULL,
 
     CONSTRAINT "group_members_pkey" PRIMARY KEY ("membership_id")
 );
 
 -- CreateTable
 CREATE TABLE "cloud_storage" (
-    "file_id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
+    "file_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
     "file_name" TEXT NOT NULL,
     "file_url" TEXT NOT NULL,
     "file_type" TEXT,
@@ -135,10 +135,10 @@ CREATE TABLE "cloud_storage" (
 
 -- CreateTable
 CREATE TABLE "pinned_items" (
-    "pinned_id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
+    "pinned_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
     "item_type" "MessageType" NOT NULL,
-    "item_id" TEXT NOT NULL,
+    "item_id" UUID NOT NULL,
     "pinned_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "pinned_items_pkey" PRIMARY KEY ("pinned_id")
@@ -146,9 +146,9 @@ CREATE TABLE "pinned_items" (
 
 -- CreateTable
 CREATE TABLE "contacts" (
-    "contact_id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
-    "contact_user_id" TEXT NOT NULL,
+    "contact_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "contact_user_id" UUID NOT NULL,
     "nickname" TEXT,
     "added_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -157,9 +157,9 @@ CREATE TABLE "contacts" (
 
 -- CreateTable
 CREATE TABLE "post_reactions" (
-    "reaction_id" TEXT NOT NULL,
-    "post_id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
+    "reaction_id" UUID NOT NULL,
+    "post_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
     "reaction_type" "ReactionType" NOT NULL,
     "reacted_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -168,9 +168,9 @@ CREATE TABLE "post_reactions" (
 
 -- CreateTable
 CREATE TABLE "hidden_posts" (
-    "hidden_post_id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
-    "post_id" TEXT NOT NULL,
+    "hidden_post_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "post_id" UUID NOT NULL,
     "hidden_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "hidden_posts_pkey" PRIMARY KEY ("hidden_post_id")
@@ -178,9 +178,9 @@ CREATE TABLE "hidden_posts" (
 
 -- CreateTable
 CREATE TABLE "refresh_tokens" (
-    "refresh_token_id" TEXT NOT NULL,
+    "refresh_token_id" UUID NOT NULL,
     "token" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
+    "user_id" UUID NOT NULL,
     "device_name" TEXT,
     "device_type" "DeviceType",
     "ip_address" TEXT,
@@ -195,21 +195,21 @@ CREATE TABLE "refresh_tokens" (
 
 -- CreateTable
 CREATE TABLE "qr_codes" (
-    "id" TEXT NOT NULL,
+    "qr_token_id" UUID NOT NULL,
     "qr_token" TEXT NOT NULL,
-    "user_id" TEXT,
+    "user_id" UUID,
     "status" "QrCodeStatus" NOT NULL DEFAULT 'PENDING',
     "expires_at" TIMESTAMP(3) NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "qr_codes_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "qr_codes_pkey" PRIMARY KEY ("qr_token_id")
 );
 
 -- CreateTable
 CREATE TABLE "notifications" (
-    "notification_id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
+    "notification_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
     "notification_type" TEXT NOT NULL,
     "notification_content" JSONB NOT NULL,
     "is_read" BOOLEAN NOT NULL DEFAULT false,
@@ -221,33 +221,33 @@ CREATE TABLE "notifications" (
 
 -- CreateTable
 CREATE TABLE "messages" (
-    "id" TEXT NOT NULL,
+    "message_id" UUID NOT NULL,
     "content" JSONB NOT NULL,
-    "sender_id" TEXT NOT NULL,
-    "receiver_id" TEXT,
-    "group_id" TEXT,
+    "sender_id" UUID NOT NULL,
+    "receiver_id" UUID,
+    "group_id" UUID,
     "is_recalled" BOOLEAN NOT NULL DEFAULT false,
     "deleted_by" TEXT[],
-    "replied_to" TEXT,
+    "replied_to" UUID,
     "reactions" JSONB[],
     "read_by" TEXT[],
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "messageType" "MessageType" DEFAULT 'USER',
 
-    CONSTRAINT "messages_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "messages_pkey" PRIMARY KEY ("message_id")
 );
 
 -- CreateTable
 CREATE TABLE "comments" (
-    "id" TEXT NOT NULL,
-    "post_id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
+    "comment_id" UUID NOT NULL,
+    "post_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
     "content" TEXT NOT NULL,
-    "replied_to" TEXT,
+    "replied_to" UUID,
     "reactions" JSONB[],
 
-    CONSTRAINT "comments_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "comments_pkey" PRIMARY KEY ("comment_id")
 );
 
 -- CreateIndex

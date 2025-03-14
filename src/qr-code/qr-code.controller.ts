@@ -19,7 +19,7 @@ export class QrCodeController {
   @Post('scan')
   async scanQrCode(
     @Body('qrToken') qrToken: string,
-    @Body('userId') userId: number,
+    @Body('userId') userId: string,
   ) {
     return this.qrCodeService.scanQrCode(qrToken, userId);
   }
@@ -27,7 +27,7 @@ export class QrCodeController {
   @Post('confirm')
   async confirmQrCode(
     @Body('qrToken') qrToken: string,
-    @Body('userId') userId: number,
+    @Body('userId') userId: string,
   ) {
     return this.qrCodeService.confirmQrCode(qrToken, userId);
   }
