@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -16,6 +17,8 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger('AuthService');
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
@@ -25,6 +28,10 @@ export class AuthService {
   ) {}
 
   async login(identifier: string, password: string, deviceInfo: any) {
+    this.logger.log(
+      `Login attempt - Identifier: ${identifier}, DeviceType: ${deviceInfo.deviceType}`,
+    );
+
     // Find user by email or phone number
     const user = await this.prisma.user.findFirst({
       where: {
@@ -44,64 +51,84 @@ export class AuthService {
     });
 
     if (!user) {
+      this.logger.warn(
+        `Login failed - User not found for identifier: ${identifier}`,
+      );
       throw new UnauthorizedException('Invalid credentials');
     }
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
+      this.logger.warn(`Login failed - Invalid password for user: ${user.id}`);
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Check for existing device session
-    let existingSession = null;
-    if (deviceInfo.deviceId) {
-      existingSession = user.refreshTokens.find(
-        (token) =>
-          token.deviceName === deviceInfo.deviceName &&
-          token.deviceType === deviceInfo.deviceType &&
-          !token.isRevoked,
+    // Check device type restrictions
+    const activeTokens = user.refreshTokens.filter(
+      (token) => !token.isRevoked && token.expiresAt > new Date(),
+    );
+
+    this.logger.debug(`Active sessions for user ${user.id}:`, {
+      activeTokens: activeTokens.map((token) => ({
+        deviceType: token.deviceType,
+        deviceName: token.deviceName,
+        expiresAt: token.expiresAt,
+      })),
+    });
+
+    // Check if there's already an active session for this device type
+    const existingDeviceTypeSession = activeTokens.find(
+      (token) => token.deviceType === deviceInfo.deviceType,
+    );
+
+    // Check if trying to login with mobile/tablet when the other type is active
+    const hasMobileSession = activeTokens.some(
+      (token) => token.deviceType === 'MOBILE',
+    );
+    const hasTabletSession = activeTokens.some(
+      (token) => token.deviceType === 'TABLET',
+    );
+
+    // Prevent mobile login if tablet is active and vice versa
+    if (
+      (deviceInfo.deviceType === 'MOBILE' && hasTabletSession) ||
+      (deviceInfo.deviceType === 'TABLET' && hasMobileSession)
+    ) {
+      this.logger.warn(
+        `Login blocked - Attempted ${deviceInfo.deviceType} login while ${
+          hasTabletSession ? 'TABLET' : 'MOBILE'
+        } session is active for user: ${user.id}`,
+      );
+      throw new BadRequestException(
+        'Cannot login on mobile and tablet simultaneously',
       );
     }
 
-    // Handle mobile/tablet device restrictions
-    if (
-      (deviceInfo.deviceType === 'MOBILE' ||
-        deviceInfo.deviceType === 'TABLET') &&
-      !existingSession
-    ) {
-      const activeTokens = user.refreshTokens.filter(
-        (token) =>
-          (token.deviceType === 'MOBILE' || token.deviceType === 'TABLET') &&
-          !token.isRevoked,
+    // If there's an existing session for this device type, revoke it
+    if (existingDeviceTypeSession) {
+      this.logger.log(
+        `Revoking existing session - UserId: ${user.id}, DeviceType: ${existingDeviceTypeSession.deviceType}, DeviceId: ${existingDeviceTypeSession.id}`,
       );
+      await this.prisma.refreshToken.update({
+        where: { id: existingDeviceTypeSession.id },
+        data: { isRevoked: true },
+      });
 
-      // Revoke all existing mobile/tablet tokens
-      if (activeTokens.length > 0) {
-        await this.prisma.refreshToken.updateMany({
-          where: {
-            userId: user.id,
-            deviceType: {
-              in: ['MOBILE', 'TABLET'],
-            },
-            isRevoked: false,
-          },
-          data: {
-            isRevoked: true,
-          },
-        });
-
-        // Notify connected devices about logout
-        for (const token of activeTokens) {
-          await this.authGateway.notifyDeviceLogout(user.id, token.id);
-        }
-      }
+      // Notify the existing device about logout
+      await this.authGateway.notifyDeviceLogout(
+        user.id,
+        existingDeviceTypeSession.id,
+      );
     }
 
     // Generate tokens
     const tokens = await this.generateTokens(user.id, deviceInfo);
 
-    // Return user info and tokens
+    this.logger.log(
+      `Login successful - UserId: ${user.id}, DeviceType: ${deviceInfo.deviceType}, DeviceId: ${tokens.deviceId}`,
+    );
+
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
@@ -142,6 +169,10 @@ export class AuthService {
       },
     });
 
+    this.logger.debug(
+      `Tokens generated - UserId: ${userId}, DeviceType: ${deviceInfo.deviceType}, DeviceId: ${refreshTokenRecord.id}`,
+    );
+
     return {
       accessToken,
       refreshToken,
@@ -150,6 +181,8 @@ export class AuthService {
   }
 
   async refreshAccessToken(refreshToken: string, deviceId: string) {
+    this.logger.log(`Token refresh attempt - DeviceId: ${deviceId}`);
+
     const tokenRecord = await this.prisma.refreshToken.findFirst({
       where: {
         token: refreshToken,
@@ -163,6 +196,9 @@ export class AuthService {
     });
 
     if (!tokenRecord) {
+      this.logger.warn(
+        `Token refresh failed - Invalid token or device ID: ${deviceId}`,
+      );
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -170,6 +206,10 @@ export class AuthService {
       sub: tokenRecord.userId,
       deviceType: tokenRecord.deviceType,
     });
+
+    this.logger.log(
+      `Token refresh successful - UserId: ${tokenRecord.userId}, DeviceId: ${deviceId}`,
+    );
 
     return {
       accessToken,
@@ -182,10 +222,24 @@ export class AuthService {
   }
 
   async logout(refreshToken: string) {
-    await this.prisma.refreshToken.update({
+    this.logger.log(`Logout attempt - Token: ${refreshToken}`);
+
+    const tokenRecord = await this.prisma.refreshToken.findUnique({
       where: { token: refreshToken },
-      data: { isRevoked: true },
     });
+
+    if (tokenRecord) {
+      await this.prisma.refreshToken.update({
+        where: { token: refreshToken },
+        data: { isRevoked: true },
+      });
+
+      this.logger.log(
+        `Logout successful - UserId: ${tokenRecord.userId}, DeviceId: ${tokenRecord.id}`,
+      );
+    } else {
+      this.logger.warn(`Logout failed - Token not found: ${refreshToken}`);
+    }
   }
 
   private generateOtp(): string {

@@ -6,6 +6,7 @@ import {
   Req,
   UnauthorizedException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Request } from 'express';
@@ -20,6 +21,8 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger('AuthController');
+
   constructor(private readonly authService: AuthService) {}
 
   @Post('register/initiate')
@@ -42,7 +45,14 @@ export class AuthController {
 
   @Post('login')
   async login(@Body() loginDto: LoginDto, @Req() request: Request) {
+    this.logger.log(
+      `Login request - Email/Phone: ${loginDto.email || loginDto.phoneNumber}, DeviceType: ${
+        loginDto.deviceType
+      }`,
+    );
+
     if (!loginDto.email && !loginDto.phoneNumber) {
+      this.logger.warn('Login failed - No email or phone number provided');
       throw new BadRequestException('Either email or phone number is required');
     }
 
@@ -53,12 +63,17 @@ export class AuthController {
       userAgent: request.headers['user-agent'],
     };
 
+    this.logger.debug('Device info:', deviceInfo);
+
     const identifier = loginDto.email || loginDto.phoneNumber;
     return this.authService.login(identifier, loginDto.password, deviceInfo);
   }
 
   @Post('refresh')
   async refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
+    this.logger.log(
+      `Token refresh request - DeviceId: ${refreshTokenDto.deviceId}`,
+    );
     return this.authService.refreshAccessToken(
       refreshTokenDto.refreshToken,
       refreshTokenDto.deviceId,
@@ -67,7 +82,10 @@ export class AuthController {
 
   @Post('logout')
   async logout(@Headers('refresh-token') refreshToken: string) {
+    this.logger.log('Logout request received');
+
     if (!refreshToken) {
+      this.logger.warn('Logout failed - No refresh token provided');
       throw new UnauthorizedException('Refresh token is required');
     }
     return this.authService.logout(refreshToken);

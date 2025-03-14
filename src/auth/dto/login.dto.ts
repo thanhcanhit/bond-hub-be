@@ -33,8 +33,4 @@ export class LoginDto {
 
   @IsEnum(DeviceType)
   deviceType: DeviceType;
-
-  @IsString()
-  @IsOptional()
-  deviceId?: string; // Unique identifier for the device if available
 }
