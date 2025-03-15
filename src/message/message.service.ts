@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UserMessageDto } from './dtos/user-message.dto';
 import { GroupMessageDto } from './dtos/group-message.dto';
+import { CreateReactionDto } from './dtos/create-reaction.dto';
+import { MessageReaction } from './dtos/MessageReaction.dto';
 
 const PAGE_SIZE = 30;
 
@@ -74,6 +76,128 @@ export class MessageService {
       },
       skip: offset,
       take: limit,
+    });
+  }
+
+  async recallMessage(messageId: string) {
+    return this.prisma.message.update({
+      where: {
+        id: messageId,
+      },
+      data: {
+        recalled: true,
+      },
+    });
+  }
+
+  async readMessage(messageId: string, readerId: string) {
+    return this.prisma.message.update({
+      where: {
+        id: messageId,
+      },
+      data: {
+        readBy: {
+          push: readerId,
+        },
+      },
+    });
+  }
+
+  async unreadMessage(messageId: string, readerId: string) {
+    // First get the current message to access its readBy array
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: { readBy: true },
+    });
+
+    // Filter out the readerId from the readBy array
+    const updatedReadBy = new Set(message.readBy);
+    updatedReadBy.delete(readerId);
+
+    // Update the message with the filtered array
+    return this.prisma.message.update({
+      where: {
+        id: messageId,
+      },
+      data: {
+        readBy: {
+          set: Array.from(updatedReadBy),
+        },
+      },
+    });
+  }
+
+  async addReaction(reaction: CreateReactionDto) {
+    const messageReactions = await this.prisma.message.findUnique({
+      where: {
+        id: reaction.messageId,
+      },
+      select: {
+        reactions: true,
+      },
+    });
+
+    const existsReaction = messageReactions.reactions.find(
+      (r: MessageReaction) => r.userId === reaction.userId,
+    );
+
+    if (existsReaction) {
+      return this.prisma.message.update({
+        where: {
+          id: reaction.messageId,
+        },
+        data: {
+          reactions: {
+            set: messageReactions.reactions.map((r: MessageReaction) =>
+              r.userId === reaction.userId
+                ? {
+                    ...r,
+                    count: r.count + 1,
+                  }
+                : r,
+            ),
+          },
+        },
+      });
+    }
+
+    return this.prisma.message.update({
+      where: {
+        id: reaction.messageId,
+      },
+      data: {
+        reactions: {
+          push: {
+            userId: reaction.userId,
+            reaction: reaction.reaction,
+            count: 1,
+          },
+        },
+      },
+    });
+  }
+
+  async removeReaction(messageId: string, userId: string) {
+    // First get the current message to access its reactions array
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: { reactions: true },
+    });
+
+    // Filter out the reactionId from the reactions array
+    const updatedReactions = message.reactions.filter(
+      (r: MessageReaction) => r.userId !== userId,
+    );
+
+    return this.prisma.message.update({
+      where: {
+        id: messageId,
+      },
+      data: {
+        reactions: {
+          set: updatedReactions,
+        },
+      },
     });
   }
 }
