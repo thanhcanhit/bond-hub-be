@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
-import { AuthGateway } from './auth.gateway';
-import { JwtModule } from '@nestjs/jwt';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MailModule } from '../mail/mail.module';
-import { RedisCacheModule } from '../cache/cache.module';
+import { SmsModule } from '../sms/sms.module';
+import { RedisCacheModule } from 'src/cache/cache.module';
+import { AuthGateway } from './auth.gateway';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './auth.guard';
 
@@ -13,10 +15,15 @@ import { AuthGuard } from './auth.guard';
   imports: [
     PrismaModule,
     MailModule,
+    SmsModule,
     RedisCacheModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '1h' },
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET'),
+        signOptions: { expiresIn: '15m' },
+      }),
+      inject: [ConfigService],
     }),
   ],
   controllers: [AuthController],

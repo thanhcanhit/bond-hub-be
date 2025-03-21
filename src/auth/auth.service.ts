@@ -7,6 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { SmsService } from '../sms/sms.service';
 import { CacheService } from '../cache/cache.service';
 import { AuthGateway } from './auth.gateway';
 import * as bcrypt from 'bcrypt';
@@ -23,6 +24,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private mailService: MailService,
+    private smsService: SmsService,
     private cacheService: CacheService,
     private authGateway: AuthGateway,
   ) {}
@@ -293,7 +295,14 @@ export class AuthService {
         throw new BadRequestException('Failed to send OTP email');
       }
     }
-    // TODO: Implement SMS OTP sending when available
+
+    // Send OTP via SMS if phone number is provided
+    if (data.phoneNumber) {
+      const smsSent = await this.smsService.sendOtp(data.phoneNumber, otp);
+      if (!smsSent) {
+        throw new BadRequestException('Failed to send OTP SMS');
+      }
+    }
 
     return {
       message: 'OTP sent successfully',
@@ -430,7 +439,14 @@ export class AuthService {
         throw new BadRequestException('Failed to send OTP email');
       }
     }
-    // TODO: Implement SMS OTP sending when available
+
+    // Send OTP via SMS if phone number exists
+    if (user.phoneNumber) {
+      const smsSent = await this.smsService.sendOtp(user.phoneNumber, otp);
+      if (!smsSent) {
+        throw new BadRequestException('Failed to send OTP SMS');
+      }
+    }
 
     return {
       message: 'OTP sent successfully',

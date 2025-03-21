@@ -38,6 +38,7 @@
     "@prisma/client": "^6.2.1",
     "@redis/client": "^1.6.0",
     "@types/socket.io": "^3.0.1",
+    "@types/twilio": "^3.19.2",
     "axios": "^1.8.3",
     "bcrypt": "^5.1.1",
     "cache-manager": "^6.4.1",
@@ -53,6 +54,7 @@
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
+    "twilio": "^5.5.1",
     "uuid": "^11.0.5"
   },
   "devDependencies": {
