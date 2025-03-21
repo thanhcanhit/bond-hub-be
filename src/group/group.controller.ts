@@ -23,14 +23,10 @@ export class GroupController {
     return this.groupService.create(createGroupDto);
   }
 
-  @Get()
-  findAll() {
-    return this.groupService.findAll();
-  }
-
-  @Get('user/:userId')
-  findUserGroups(@Param('userId') userId: string) {
-    return this.groupService.findUserGroups(userId);
+  @Get('user')
+  findUserGroups(@Request() req: Request) {
+    const currentUserId = req['user'].sub;
+    return this.groupService.findUserGroups(currentUserId);
   }
 
   @Get(':id')
@@ -39,14 +35,20 @@ export class GroupController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateGroupDto: UpdateGroupDto) {
-    return this.groupService.update(id, updateGroupDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateGroupDto: UpdateGroupDto,
+    @Request() req: Request,
+  ) {
+    const requestUserId = req['user'].sub;
+    return this.groupService.update(id, updateGroupDto, requestUserId);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id') id: string) {
-    return this.groupService.remove(id);
+  remove(@Param('id') id: string, @Request() req: Request) {
+    const requestUserId = req['user'].sub;
+    return this.groupService.remove(id, requestUserId);
   }
 
   @Post('members')
@@ -58,9 +60,11 @@ export class GroupController {
   @HttpCode(HttpStatus.NO_CONTENT)
   removeMember(
     @Param('groupId') groupId: string,
-    @Param('userId') userId: string,
+    @Param('userId') removeUserId: string,
+    @Request() req: Request,
   ) {
-    return this.groupService.removeMember(groupId, userId);
+    const requestUserId = req['user'].sub;
+    return this.groupService.removeMember(groupId, removeUserId, requestUserId);
   }
 
   @Patch(':groupId/members/:userId/role')
@@ -68,7 +72,14 @@ export class GroupController {
     @Param('groupId') groupId: string,
     @Param('userId') userId: string,
     @Body('role') role: GroupRole,
+    @Request() req: Request,
   ) {
-    return this.groupService.updateMemberRole(groupId, userId, role);
+    const requestUserId = req['user'].sub;
+    return this.groupService.updateMemberRole(
+      groupId,
+      userId,
+      role,
+      requestUserId,
+    );
   }
 }
