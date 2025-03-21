@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  Request,
 } from '@nestjs/common';
 import { MessageService } from './message.service';
 import { UserMessageDto } from './dtos/user-message.dto';
@@ -21,96 +22,120 @@ export class MessageController {
 
   @Get('/group/:groupId')
   async getGroupMessages(
+    @Request() req: Request,
     @Param('groupId') groupId: string,
     @Query('page') page = 1,
   ) {
-    return this.messageService.getGroupMessages(groupId, page);
+    const requestUserId = req['user'].sub;
+    return this.messageService.getGroupMessages(requestUserId, groupId, page);
   }
 
-  @Get('/user')
-  async getUserMessages(
-    @Body('userIdA', ParseUUIDPipe) userIdA: string,
-    @Body('userIdB', ParseUUIDPipe) userIdB: string,
-    @Query('page') page = 1,
-  ) {
-    return this.messageService.getUserMessages(userIdA, userIdB, page);
-  }
-
-  @Get('/group/:groupId')
+  @Get('/group/:groupId/search')
   async findMessagesInGroup(
+    @Request() req: Request,
     @Param('groupId') groupId: string,
     @Query('searchText') searchText: string,
     @Query('page', ParseIntPipe) page = 1,
   ) {
+    const requestUserId = req['user'].sub;
     return this.messageService.findMessagesInGroup(groupId, searchText, page);
   }
 
-  @Get('/user/:userId')
+  @Get('/user/:userIdB/search')
   async findMessagesInUser(
-    @Param('userIdA', ParseUUIDPipe) userIdA: string,
-    @Body('userIdB', ParseUUIDPipe) userIdB: string,
-    @Query('searchText')
-    searchText: string,
+    @Request() req: Request,
+    @Param('userIdB', ParseUUIDPipe) userIdB: string,
+    @Query('searchText') searchText: string,
     @Query('page', ParseIntPipe) page = 1,
   ) {
+    const requestUserId = req['user'].sub;
     return this.messageService.findMessagesInUser(
-      userIdA,
+      requestUserId,
       userIdB,
       searchText,
       page,
     );
   }
 
+  @Get('/user/:userIdB')
+  async getUserMessages(
+    @Request() req: Request,
+    @Param('userIdB', ParseUUIDPipe) userIdB: string,
+    @Query('page') page = 1,
+  ) {
+    const requestUserId = req['user'].sub;
+    return this.messageService.getUserMessages(requestUserId, userIdB, page);
+  }
+
   @Post('/user')
-  async createUserMessage(@Body() message: UserMessageDto) {
-    return this.messageService.createUserMessage(message);
+  async createUserMessage(
+    @Body() messageBody: UserMessageDto,
+    @Request() req: Request,
+  ) {
+    const requestUserId = req['user'].sub;
+    return this.messageService.createUserMessage(messageBody, requestUserId);
   }
 
   @Post('/group')
-  async createGroupMessage(@Body() message: GroupMessageDto) {
-    return this.messageService.createGroupMessage(message);
+  async createGroupMessage(
+    @Body() messageBody: GroupMessageDto,
+    @Request() req: Request,
+  ) {
+    const requestUserId = req['user'].sub;
+    return this.messageService.createGroupMessage(messageBody, requestUserId);
   }
 
-  // TODO: Check jwt user id = message sender id
   @Patch('/recall/:messageId')
-  async recallMessage(@Param('messageId', ParseUUIDPipe) messageId: string) {
-    return this.messageService.recallMessage(messageId);
+  async recallMessage(
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @Request() req: Request,
+  ) {
+    const requestUserId = req['user'].sub;
+    return this.messageService.recallMessage(messageId, requestUserId);
   }
 
   @Delete('/deleted-self-side/:messageId')
   async deleteMessage(
     @Param('messageId', ParseUUIDPipe) messageId: string,
-    userId: string,
+    @Request() req: Request,
   ) {
-    return this.messageService.deleteMessageSelfSide(messageId, userId);
+    const requestUserId = req['user'].sub;
+    return this.messageService.deleteMessageSelfSide(messageId, requestUserId);
   }
 
-  @Patch('read/:messageId')
+  @Patch('/read/:messageId')
   async readMessage(
     @Param('messageId', ParseUUIDPipe) messageId: string,
-    @Body('readerId') readerId: string,
+    @Request() req: Request,
   ) {
-    return this.messageService.readMessage(messageId, readerId);
+    const requestUserId = req['user'].sub;
+    return this.messageService.readMessage(messageId, requestUserId);
   }
 
-  @Patch('unread/:messageId')
+  @Patch('/unread/:messageId')
   async unreadMessage(
     @Param('messageId', ParseUUIDPipe) messageId: string,
-    @Body('readerId') readerId: string,
+    @Request() req: Request,
   ) {
-    return this.messageService.unreadMessage(messageId, readerId);
+    const requestUserId = req['user'].sub;
+    return this.messageService.unreadMessage(messageId, requestUserId);
   }
 
   @Post('/reaction')
-  async addReaction(@Body() reaction: CreateReactionDto) {
-    return this.messageService.addReaction(reaction);
+  async addReaction(
+    @Body() reaction: CreateReactionDto,
+    @Request() req: Request,
+  ) {
+    const requestUserId = req['user'].sub;
+    return this.messageService.addReaction(reaction, requestUserId);
   }
 
   @Delete('/reaction/:messageId')
   async removeReaction(
     @Param('messageId', ParseUUIDPipe) messageId: string,
-    @Body('userId') userId: string,
+    @Request() req: Request,
   ) {
-    return this.messageService.removeReaction(messageId, userId);
+    const requestUserId = req['user'].sub;
+    return this.messageService.removeReaction(messageId, requestUserId);
   }
 }
