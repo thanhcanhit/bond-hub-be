@@ -293,8 +293,8 @@ enum MessageType {
 enum DeviceType {
   MOBILE
   TABLET
+  WEB
   DESKTOP
-  OTHER
 }
 
 enum FriendStatus {

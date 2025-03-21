@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
+import { AuthGateway } from './auth.gateway';
 import { JwtModule } from '@nestjs/jwt';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MailModule } from '../mail/mail.module';
@@ -21,6 +22,7 @@ import { AuthGuard } from './auth.guard';
   controllers: [AuthController],
   providers: [
     AuthService,
+    AuthGateway,
     {
       provide: APP_GUARD,
       useClass: AuthGuard,
