@@ -8,6 +8,7 @@ import {
   Delete,
   HttpCode,
   HttpStatus,
+  Request,
 } from '@nestjs/common';
 import { GroupService } from './group.service';
 import { CreateGroupDto, UpdateGroupDto, AddMemberDto } from './dto';
