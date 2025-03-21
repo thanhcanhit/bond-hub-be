@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   ParseUUIDPipe,
   Patch,
   Post,
@@ -35,6 +36,31 @@ export class MessageController {
     return this.messageService.getUserMessages(userIdA, userIdB, page);
   }
 
+  @Get('/group/:groupId')
+  async findMessagesInGroup(
+    @Param('groupId') groupId: string,
+    @Query('searchText') searchText: string,
+    @Query('page', ParseIntPipe) page = 1,
+  ) {
+    return this.messageService.findMessagesInGroup(groupId, searchText, page);
+  }
+
+  @Get('/user/:userId')
+  async findMessagesInUser(
+    @Param('userIdA', ParseUUIDPipe) userIdA: string,
+    @Body('userIdB', ParseUUIDPipe) userIdB: string,
+    @Query('searchText')
+    searchText: string,
+    @Query('page', ParseIntPipe) page = 1,
+  ) {
+    return this.messageService.findMessagesInUser(
+      userIdA,
+      userIdB,
+      searchText,
+      page,
+    );
+  }
+
   @Post('/user')
   async createUserMessage(@Body() message: UserMessageDto) {
     return this.messageService.createUserMessage(message);
@@ -49,6 +75,14 @@ export class MessageController {
   @Patch('/recall/:messageId')
   async recallMessage(@Param('messageId', ParseUUIDPipe) messageId: string) {
     return this.messageService.recallMessage(messageId);
+  }
+
+  @Delete('/deleted-self-side/:messageId')
+  async deleteMessage(
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    userId: string,
+  ) {
+    return this.messageService.deleteMessageSelfSide(messageId, userId);
   }
 
   @Patch('read/:messageId')

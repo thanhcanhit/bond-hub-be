@@ -15,8 +15,10 @@ import { CompleteRegistrationDto } from './dto/complete-registration.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { VerifyForgotPasswordOtpDto } from './dto/verify-forgot-password-otp.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { Public } from './public.decorator';
 
 @Controller('auth')
+@Public()
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

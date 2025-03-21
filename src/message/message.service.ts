@@ -200,4 +200,68 @@ export class MessageService {
       },
     });
   }
+
+  async deleteMessageSelfSide(messageId: string, userId: string) {
+    return this.prisma.message.update({
+      where: {
+        id: messageId,
+      },
+      data: {
+        deletedBy: {
+          push: userId,
+        },
+      },
+    });
+  }
+
+  async findMessagesInGroup(groupId: string, searchText: string, page: number) {
+    const limit = PAGE_SIZE;
+    const offset = page - 1 * limit;
+    return this.prisma.message.findMany({
+      where: {
+        groupId,
+        content: {
+          path: ['text'],
+          string_contains: searchText,
+        },
+      },
+      skip: offset,
+      take: limit,
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+  async findMessagesInUser(
+    userIdA: string,
+    userIdB: string,
+    searchText: string,
+    page: number,
+  ) {
+    const limit = PAGE_SIZE;
+    const offset = page - 1 * limit;
+    return this.prisma.message.findMany({
+      where: {
+        OR: [
+          {
+            senderId: userIdA,
+            receiverId: userIdB,
+          },
+          {
+            senderId: userIdB,
+            receiverId: userIdA,
+          },
+        ],
+        content: {
+          path: ['text'],
+          string_contains: searchText,
+        },
+      },
+      skip: offset,
+      take: limit,
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
 }
