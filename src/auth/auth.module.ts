@@ -7,7 +7,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { MailModule } from '../mail/mail.module';
 import { RedisCacheModule } from '../cache/cache.module';
 import { APP_GUARD } from '@nestjs/core';
-import { AuthGuard } from './auth.guard';
+import { AuthGuard } from './guards/auth.guard';
 
 @Module({
   imports: [
@@ -16,7 +16,7 @@ import { AuthGuard } from './auth.guard';
     RedisCacheModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '1h' },
+      signOptions: { expiresIn: '' },
     }),
   ],
   controllers: [AuthController],
