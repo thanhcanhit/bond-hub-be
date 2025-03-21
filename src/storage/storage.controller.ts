@@ -14,9 +14,11 @@ import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { StorageService } from './storage.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { FileMetadata } from './interfaces/file-metadata.interface';
+import { Public } from 'src/auth/public.decorator';
 
 @Controller('storage')
 @UseGuards(AuthGuard)
+@Public()
 export class StorageController {
   constructor(private readonly storageService: StorageService) {}
 
@@ -30,20 +32,20 @@ export class StorageController {
     return this.storageService.uploadFiles(files, bucketName, path);
   }
 
-  @Put('update/:bucket/*')
+  @Put('update/:bucket/:path(*)')
   @UseInterceptors(FileInterceptor('file'))
   async updateFile(
     @UploadedFile() file: Express.Multer.File,
     @Param('bucket') bucketName: string,
-    @Param('0') filePath: string,
+    @Param('path') filePath: string,
   ): Promise<FileMetadata> {
     return this.storageService.updateFile(file, filePath, bucketName);
   }
 
-  @Delete('delete/:bucket/*')
+  @Delete('delete/:bucket/:path(*)')
   async deleteFile(
     @Param('bucket') bucketName: string,
-    @Param('0') filePath: string,
+    @Param('path') filePath: string,
   ) {
     return this.storageService.deleteFile(filePath, bucketName);
   }
