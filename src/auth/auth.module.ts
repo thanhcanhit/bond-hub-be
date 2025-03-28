@@ -16,7 +16,7 @@ import { AuthGuard } from './guards/auth.guard';
     RedisCacheModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '' },
+      signOptions: { expiresIn: '15m' },
     }),
   ],
   controllers: [AuthController],
