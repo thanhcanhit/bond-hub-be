@@ -45,6 +45,7 @@ export class MessageGateway
       const decoded = this.jwtService.verify(token);
       return decoded.sub;
     } catch (error) {
+      console.error('Error verifying token:', error);
       return null;
     }
   }
