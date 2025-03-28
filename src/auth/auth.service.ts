@@ -7,13 +7,16 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { SmsService } from '../sms/sms.service';
 import { CacheService } from '../cache/cache.service';
 import { AuthGateway } from './auth.gateway';
+import { StorageService } from '../storage/storage.service';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { InitiateRegistrationDto } from './dto/initiate-registration.dto';
 import { CompleteRegistrationDto } from './dto/complete-registration.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { UpdateBasicInfoDto } from './dto/update-basic-info.dto';
 
 @Injectable()
 export class AuthService {
@@ -23,8 +26,10 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private mailService: MailService,
+    private smsService: SmsService,
     private cacheService: CacheService,
     private authGateway: AuthGateway,
+    private storageService: StorageService,
   ) {}
 
   async login(identifier: string, password: string, deviceInfo: any) {
@@ -293,7 +298,14 @@ export class AuthService {
         throw new BadRequestException('Failed to send OTP email');
       }
     }
-    // TODO: Implement SMS OTP sending when available
+
+    // Send OTP via SMS if phone number is provided
+    if (data.phoneNumber) {
+      const smsSent = await this.smsService.sendOtp(data.phoneNumber, otp);
+      if (!smsSent) {
+        throw new BadRequestException('Failed to send OTP SMS');
+      }
+    }
 
     return {
       message: 'OTP sent successfully',
@@ -430,7 +442,14 @@ export class AuthService {
         throw new BadRequestException('Failed to send OTP email');
       }
     }
-    // TODO: Implement SMS OTP sending when available
+
+    // Send OTP via SMS if phone number exists
+    if (user.phoneNumber) {
+      const smsSent = await this.smsService.sendOtp(user.phoneNumber, otp);
+      if (!smsSent) {
+        throw new BadRequestException('Failed to send OTP SMS');
+      }
+    }
 
     return {
       message: 'OTP sent successfully',
@@ -482,6 +501,166 @@ export class AuthService {
 
     return {
       message: 'Password reset successfully',
+    };
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { passwordHash: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.passwordHash,
+    );
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: hashedPassword },
+    });
+
+    return { message: 'Password updated successfully' };
+  }
+
+  async updateBasicInfo(userId: string, updateDto: UpdateBasicInfoDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { userInfo: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (!user.userInfo) {
+      // Create new UserInfo if it doesn't exist
+      await this.prisma.userInfo.create({
+        data: {
+          id: userId,
+          ...updateDto,
+        },
+      });
+    } else {
+      // Update existing UserInfo
+      await this.prisma.userInfo.update({
+        where: { id: userId },
+        data: updateDto,
+      });
+    }
+
+    return { message: 'User information updated successfully' };
+  }
+
+  async updateProfilePicture(userId: string, file: Express.Multer.File) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { userInfo: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Delete old profile picture if exists
+    if (user.userInfo?.profilePictureUrl) {
+      try {
+        const oldPath = new URL(user.userInfo.profilePictureUrl).pathname
+          .split('/')
+          .pop();
+        if (oldPath) {
+          await this.storageService.deleteFile(oldPath, 'avatars');
+        }
+      } catch (error) {
+        this.logger.warn('Failed to delete old profile picture', error);
+      }
+    }
+
+    // Upload new profile picture
+    const [uploadedFile] = await this.storageService.uploadFiles(
+      [file],
+      'avatars',
+      userId,
+    );
+
+    // Update user info with new profile picture URL
+    await this.prisma.userInfo.upsert({
+      where: { id: userId },
+      create: {
+        id: userId,
+        profilePictureUrl: uploadedFile.url,
+      },
+      update: {
+        profilePictureUrl: uploadedFile.url,
+      },
+    });
+
+    return {
+      message: 'Profile picture updated successfully',
+      url: uploadedFile.url,
+    };
+  }
+
+  async updateCoverImage(userId: string, file: Express.Multer.File) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { userInfo: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Delete old cover image if exists
+    if (user.userInfo?.coverImgUrl) {
+      try {
+        const oldPath = new URL(user.userInfo.coverImgUrl).pathname
+          .split('/')
+          .pop();
+        if (oldPath) {
+          await this.storageService.deleteFile(oldPath, 'backgrounds');
+        }
+      } catch (error) {
+        this.logger.warn('Failed to delete old cover image', error);
+      }
+    }
+
+    // Upload new cover image
+    const [uploadedFile] = await this.storageService.uploadFiles(
+      [file],
+      'backgrounds',
+      userId,
+    );
+
+    // Update user info with new cover image URL
+    await this.prisma.userInfo.upsert({
+      where: { id: userId },
+      create: {
+        id: userId,
+        coverImgUrl: uploadedFile.url,
+      },
+      update: {
+        coverImgUrl: uploadedFile.url,
+      },
+    });
+
+    return {
+      message: 'Cover image updated successfully',
+      url: uploadedFile.url,
     };
   }
 }

@@ -7,9 +7,14 @@ import {
   UnauthorizedException,
   BadRequestException,
   Logger,
+  Put,
+  UseGuards,
+  UploadedFile,
+  UseInterceptors,
+  ValidationPipe,
 } from '@nestjs/common';
+import { Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
-import { Request } from 'express';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { InitiateRegistrationDto } from './dto/initiate-registration.dto';
@@ -19,20 +24,24 @@ import { VerifyForgotPasswordOtpDto } from './dto/verify-forgot-password-otp.dto
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Public } from './public.decorator';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateBasicInfoDto } from './dto/update-basic-info.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('auth')
-@Public()
 export class AuthController {
   private readonly logger = new Logger('AuthController');
 
   constructor(private readonly authService: AuthService) {}
 
   @Post('register/initiate')
+  @Public()
   async initiateRegistration(@Body() initiateDto: InitiateRegistrationDto) {
     return this.authService.initiateRegistration(initiateDto);
   }
 
   @Post('register/verify')
+  @Public()
   async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
     return this.authService.verifyOtp(
       verifyOtpDto.registrationId,
@@ -41,12 +50,14 @@ export class AuthController {
   }
 
   @Post('register/complete')
+  @Public()
   async completeRegistration(@Body() completeDto: CompleteRegistrationDto) {
     return this.authService.completeRegistration(completeDto);
   }
 
   @Post('login')
-  async login(@Body() loginDto: LoginDto, @Req() request: Request) {
+  @Public()
+  async login(@Body() loginDto: LoginDto, @Req() request: ExpressRequest) {
     this.logger.log(
       `Login request - Email/Phone: ${loginDto.email || loginDto.phoneNumber}, DeviceType: ${
         loginDto.deviceType
@@ -72,6 +83,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Public()
   async refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
     this.logger.log(
       `Token refresh request - DeviceId: ${refreshTokenDto.deviceId}`,
@@ -94,11 +106,13 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @Public()
   async initiateForgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.authService.initiateForgotPassword(forgotPasswordDto);
   }
 
   @Post('forgot-password/verify')
+  @Public()
   async verifyForgotPasswordOtp(@Body() verifyDto: VerifyForgotPasswordOtpDto) {
     return this.authService.verifyForgotPasswordOtp(
       verifyDto.resetId,
@@ -107,10 +121,54 @@ export class AuthController {
   }
 
   @Post('forgot-password/reset')
+  @Public()
   async resetPassword(@Body() resetDto: ResetPasswordDto) {
     return this.authService.resetPassword(
       resetDto.resetId,
       resetDto.newPassword,
     );
+  }
+
+  @Put('change-password')
+  async changePassword(
+    @Body() changePasswordDto: ChangePasswordDto,
+    @Req() request: Request,
+  ) {
+    const userId = request['user'].sub;
+    return this.authService.changePassword(
+      userId,
+      changePasswordDto.currentPassword,
+      changePasswordDto.newPassword,
+    );
+  }
+
+  @Put('update-basic-info')
+  async updateBasicInfo(
+    @Body(new ValidationPipe({ transform: true }))
+    updateBasicInfoDto: UpdateBasicInfoDto,
+    @Req() request: Request,
+  ) {
+    const userId = request['user'].sub;
+    return this.authService.updateBasicInfo(userId, updateBasicInfoDto);
+  }
+
+  @Put('update-profile-picture')
+  @UseInterceptors(FileInterceptor('file'))
+  async updateProfilePicture(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() request: Request,
+  ) {
+    const userId = request['user'].sub;
+    return this.authService.updateProfilePicture(userId, file);
+  }
+
+  @Put('update-cover-image')
+  @UseInterceptors(FileInterceptor('file'))
+  async updateCoverImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() request: Request,
+  ) {
+    const userId = request['user'].sub;
+    return this.authService.updateCoverImage(userId, file);
   }
 }
