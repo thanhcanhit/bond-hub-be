@@ -1,9 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UserMessageDto } from './dtos/user-message.dto';
 import { GroupMessageDto } from './dtos/group-message.dto';
 import { CreateReactionDto } from './dtos/create-reaction.dto';
-import { MessageReaction } from './dtos/MessageReaction.dto';
+import { MessageReaction } from './dtos/message-reaction.dto';
 
 const PAGE_SIZE = 30;
 
@@ -11,10 +11,21 @@ const PAGE_SIZE = 30;
 export class MessageService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createUserMessage(message: UserMessageDto) {
+  async createUserMessage(message: UserMessageDto, userId: string) {
+    // Validation: ensure the sender is the authenticated user
+    if (message.senderId && message.senderId !== userId) {
+      throw new ForbiddenException('You can only send messages as yourself');
+    }
+
+    // Prevent self-messaging
+    if (message.receiverId === userId) {
+      throw new ForbiddenException('You cannot send messages to yourself');
+    }
+
     return this.prisma.message.create({
       data: {
         ...message,
+        senderId: userId, // Ensure the sender is the authenticated user
         content: {
           text: message.content.text,
           media: message.content.media || [],
@@ -23,10 +34,29 @@ export class MessageService {
       },
     });
   }
-  async createGroupMessage(message: GroupMessageDto) {
+
+  async createGroupMessage(message: GroupMessageDto, userId: string) {
+    // Validation: ensure the sender is the authenticated user
+    if (message.senderId && message.senderId !== userId) {
+      throw new ForbiddenException('You can only send messages as yourself');
+    }
+
+    // Check if user is a member of the group
+    const isMember = await this.prisma.groupMember.findFirst({
+      where: {
+        groupId: message.groupId,
+        userId,
+      },
+    });
+
+    if (!isMember) {
+      throw new ForbiddenException('You are not a member of this group');
+    }
+
     return this.prisma.message.create({
       data: {
         ...message,
+        senderId: userId, // Ensure the sender is the authenticated user
         content: {
           text: message.content.text,
           media: message.content.media || [],
@@ -36,9 +66,20 @@ export class MessageService {
     });
   }
 
-  async getGroupMessages(groupId: string, page: number) {
+  async getGroupMessages(requestUserId: string, groupId: string, page: number) {
     const limit = PAGE_SIZE;
     const offset = (page - 1) * limit;
+
+    const isMember = await this.prisma.groupMember.findFirst({
+      where: {
+        groupId,
+        userId: requestUserId,
+      },
+    });
+
+    if (!isMember) {
+      throw new ForbiddenException('You are not a member of this group');
+    }
 
     return this.prisma.message.findMany({
       where: {
@@ -56,6 +97,11 @@ export class MessageService {
   }
 
   async getUserMessages(userIdA: string, userIdB: string, page: number) {
+    // Prevent retrieving self-messages
+    if (userIdA === userIdB) {
+      throw new ForbiddenException('Cannot retrieve messages with yourself');
+    }
+
     const limit = PAGE_SIZE;
     const offset = (page - 1) * limit;
     return this.prisma.message.findMany({
@@ -79,7 +125,20 @@ export class MessageService {
     });
   }
 
-  async recallMessage(messageId: string) {
+  async recallMessage(messageId: string, userId: string) {
+    // Check if the user is the sender of the message
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+    });
+
+    if (!message) {
+      throw new ForbiddenException('Message not found');
+    }
+
+    if (message.senderId !== userId) {
+      throw new ForbiddenException('You can only recall your own messages');
+    }
+
     return this.prisma.message.update({
       where: {
         id: messageId,
@@ -91,6 +150,38 @@ export class MessageService {
   }
 
   async readMessage(messageId: string, readerId: string) {
+    // Verify the message exists and user has access to it
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+    });
+
+    if (!message) {
+      throw new ForbiddenException('Message not found');
+    }
+
+    // For user messages, check if user is sender or receiver
+    if (
+      message.messageType === 'USER' &&
+      message.senderId !== readerId &&
+      message.receiverId !== readerId
+    ) {
+      throw new ForbiddenException('You do not have access to this message');
+    }
+
+    // For group messages, check if user is a member of the group
+    if (message.messageType === 'GROUP') {
+      const isMember = await this.prisma.groupMember.findFirst({
+        where: {
+          groupId: message.groupId,
+          userId: readerId,
+        },
+      });
+
+      if (!isMember) {
+        throw new ForbiddenException('You are not a member of this group');
+      }
+    }
+
     return this.prisma.message.update({
       where: {
         id: messageId,
@@ -104,14 +195,47 @@ export class MessageService {
   }
 
   async unreadMessage(messageId: string, readerId: string) {
-    // First get the current message to access its readBy array
+    // Verify the message exists and user has access to it
     const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+    });
+
+    if (!message) {
+      throw new ForbiddenException('Message not found');
+    }
+
+    // For user messages, check if user is sender or receiver
+    if (
+      message.messageType === 'USER' &&
+      message.senderId !== readerId &&
+      message.receiverId !== readerId
+    ) {
+      throw new ForbiddenException('You do not have access to this message');
+    }
+
+    // For group messages, check if user is a member of the group
+    if (message.messageType === 'GROUP') {
+      const isMember = await this.prisma.groupMember.findFirst({
+        where: {
+          groupId: message.groupId,
+          userId: readerId,
+        },
+      });
+
+      if (!isMember) {
+        throw new ForbiddenException('You are not a member of this group');
+      }
+    }
+
+    // First get the current message to access its readBy array
+    const messageData = await this.prisma.message.findUnique({
       where: { id: messageId },
       select: { readBy: true },
     });
 
-    // Filter out the readerId from the readBy array
-    const updatedReadBy = new Set(message.readBy);
+    // Ensure readBy is an array before creating a Set
+    const readBy = Array.isArray(messageData.readBy) ? messageData.readBy : [];
+    const updatedReadBy = new Set(readBy as string[]);
     updatedReadBy.delete(readerId);
 
     // Update the message with the filtered array
@@ -127,7 +251,42 @@ export class MessageService {
     });
   }
 
-  async addReaction(reaction: CreateReactionDto) {
+  async addReaction(reaction: CreateReactionDto, userId: string) {
+    // Set the user ID in the reaction object
+    reaction.userId = userId;
+
+    // Verify the message exists and user has access to it
+    const message = await this.prisma.message.findUnique({
+      where: { id: reaction.messageId },
+    });
+
+    if (!message) {
+      throw new ForbiddenException('Message not found');
+    }
+
+    // For user messages, check if user is sender or receiver
+    if (
+      message.messageType === 'USER' &&
+      message.senderId !== userId &&
+      message.receiverId !== userId
+    ) {
+      throw new ForbiddenException('You do not have access to this message');
+    }
+
+    // For group messages, check if user is a member of the group
+    if (message.messageType === 'GROUP') {
+      const isMember = await this.prisma.groupMember.findFirst({
+        where: {
+          groupId: message.groupId,
+          userId,
+        },
+      });
+
+      if (!isMember) {
+        throw new ForbiddenException('You are not a member of this group');
+      }
+    }
+
     const messageReactions = await this.prisma.message.findUnique({
       where: {
         id: reaction.messageId,
@@ -137,8 +296,13 @@ export class MessageService {
       },
     });
 
-    const existsReaction = messageReactions.reactions.find(
-      (r: MessageReaction) => r.userId === reaction.userId,
+    // Ensure reactions is an array
+    const reactions = Array.isArray(messageReactions.reactions)
+      ? messageReactions.reactions
+      : [];
+
+    const existsReaction = reactions.find(
+      (r: MessageReaction) => r.userId === userId,
     );
 
     if (existsReaction) {
@@ -148,8 +312,8 @@ export class MessageService {
         },
         data: {
           reactions: {
-            set: messageReactions.reactions.map((r: MessageReaction) =>
-              r.userId === reaction.userId
+            set: reactions.map((r: MessageReaction) =>
+              r.userId === userId
                 ? {
                     ...r,
                     count: r.count + 1,
@@ -168,7 +332,7 @@ export class MessageService {
       data: {
         reactions: {
           push: {
-            userId: reaction.userId,
+            userId,
             reaction: reaction.reaction,
             count: 1,
           },
@@ -178,14 +342,51 @@ export class MessageService {
   }
 
   async removeReaction(messageId: string, userId: string) {
-    // First get the current message to access its reactions array
+    // Verify the message exists and user has access to it
     const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+    });
+
+    if (!message) {
+      throw new ForbiddenException('Message not found');
+    }
+
+    // For user messages, check if user is sender or receiver
+    if (
+      message.messageType === 'USER' &&
+      message.senderId !== userId &&
+      message.receiverId !== userId
+    ) {
+      throw new ForbiddenException('You do not have access to this message');
+    }
+
+    // For group messages, check if user is a member of the group
+    if (message.messageType === 'GROUP') {
+      const isMember = await this.prisma.groupMember.findFirst({
+        where: {
+          groupId: message.groupId,
+          userId,
+        },
+      });
+
+      if (!isMember) {
+        throw new ForbiddenException('You are not a member of this group');
+      }
+    }
+
+    // First get the current message to access its reactions array
+    const messageData = await this.prisma.message.findUnique({
       where: { id: messageId },
       select: { reactions: true },
     });
 
-    // Filter out the reactionId from the reactions array
-    const updatedReactions = message.reactions.filter(
+    // Ensure reactions is an array
+    const reactions = Array.isArray(messageData.reactions)
+      ? messageData.reactions
+      : [];
+
+    // Filter out the reaction from this user
+    const updatedReactions = reactions.filter(
       (r: MessageReaction) => r.userId !== userId,
     );
 
@@ -202,6 +403,38 @@ export class MessageService {
   }
 
   async deleteMessageSelfSide(messageId: string, userId: string) {
+    // Verify the message exists and user has access to it
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+    });
+
+    if (!message) {
+      throw new ForbiddenException('Message not found');
+    }
+
+    // For user messages, check if user is sender or receiver
+    if (
+      message.messageType === 'USER' &&
+      message.senderId !== userId &&
+      message.receiverId !== userId
+    ) {
+      throw new ForbiddenException('You do not have access to this message');
+    }
+
+    // For group messages, check if user is a member of the group
+    if (message.messageType === 'GROUP') {
+      const isMember = await this.prisma.groupMember.findFirst({
+        where: {
+          groupId: message.groupId,
+          userId,
+        },
+      });
+
+      if (!isMember) {
+        throw new ForbiddenException('You are not a member of this group');
+      }
+    }
+
     return this.prisma.message.update({
       where: {
         id: messageId,
@@ -214,9 +447,25 @@ export class MessageService {
     });
   }
 
-  async findMessagesInGroup(groupId: string, searchText: string, page: number) {
+  async findMessagesInGroup(
+    requestUserId: string,
+    groupId: string,
+    searchText: string,
+    page: number,
+  ) {
+    const isMember = await this.prisma.groupMember.findFirst({
+      where: {
+        groupId,
+        userId: requestUserId,
+      },
+    });
+
+    if (!isMember) {
+      throw new ForbiddenException('You are not a member of this group');
+    }
+
     const limit = PAGE_SIZE;
-    const offset = page - 1 * limit;
+    const offset = (page - 1) * limit;
     return this.prisma.message.findMany({
       where: {
         groupId,
@@ -232,30 +481,46 @@ export class MessageService {
       },
     });
   }
+
   async findMessagesInUser(
     userIdA: string,
     userIdB: string,
     searchText: string,
     page: number,
   ) {
+    // Prevent searching self-messages
+    if (userIdA === userIdB) {
+      throw new ForbiddenException('Cannot search messages with yourself');
+    }
+
     const limit = PAGE_SIZE;
-    const offset = page - 1 * limit;
+    const offset = (page - 1) * limit;
     return this.prisma.message.findMany({
       where: {
-        OR: [
+        AND: [
           {
-            senderId: userIdA,
-            receiverId: userIdB,
+            OR: [
+              {
+                senderId: userIdA,
+                receiverId: userIdB,
+              },
+              {
+                senderId: userIdB,
+                receiverId: userIdA,
+              },
+            ],
           },
           {
-            senderId: userIdB,
-            receiverId: userIdA,
+            content: {
+              path: ['text'],
+              string_contains: searchText,
+            },
           },
         ],
-        content: {
-          path: ['text'],
-          string_contains: searchText,
-        },
+        messageType: 'USER',
+      },
+      include: {
+        sender: true,
       },
       skip: offset,
       take: limit,

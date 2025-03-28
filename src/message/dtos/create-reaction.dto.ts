@@ -5,9 +5,8 @@ export class CreateReactionDto {
   @IsUUID()
   messageId: string;
 
-  @IsUUID()
-  userId: string;
-
   @IsEnum(ReactionType)
   reaction: ReactionType;
+
+  userId: string;
 }

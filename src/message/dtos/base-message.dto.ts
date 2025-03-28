@@ -23,9 +23,10 @@ export class BaseCreateMessageDto {
   content: MessageContentDto;
 
   @IsUUID()
-  senderId: string;
+  @IsOptional()
+  repliedTo?: string;
 
   @IsUUID()
   @IsOptional()
-  repliedTo?: string;
+  senderId?: string;
 }
