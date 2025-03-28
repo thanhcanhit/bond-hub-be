@@ -3,7 +3,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { UserMessageDto } from './dtos/user-message.dto';
 import { GroupMessageDto } from './dtos/group-message.dto';
 import { CreateReactionDto } from './dtos/create-reaction.dto';
-import { MessageReaction } from './dtos/MessageReaction.dto';
+import { MessageReaction } from './dtos/message-reaction.dto';
 
 const PAGE_SIZE = 30;
 
@@ -447,7 +447,23 @@ export class MessageService {
     });
   }
 
-  async findMessagesInGroup(groupId: string, searchText: string, page: number) {
+  async findMessagesInGroup(
+    requestUserId: string,
+    groupId: string,
+    searchText: string,
+    page: number,
+  ) {
+    const isMember = await this.prisma.groupMember.findFirst({
+      where: {
+        groupId,
+        userId: requestUserId,
+      },
+    });
+
+    if (!isMember) {
+      throw new ForbiddenException('You are not a member of this group');
+    }
+
     const limit = PAGE_SIZE;
     const offset = (page - 1) * limit;
     return this.prisma.message.findMany({

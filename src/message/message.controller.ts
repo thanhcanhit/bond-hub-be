@@ -38,7 +38,12 @@ export class MessageController {
     @Query('page', ParseIntPipe) page = 1,
   ) {
     const requestUserId = req['user'].sub;
-    return this.messageService.findMessagesInGroup(groupId, searchText, page);
+    return this.messageService.findMessagesInGroup(
+      requestUserId,
+      groupId,
+      searchText,
+      page,
+    );
   }
 
   @Get('/user/:userIdB/search')

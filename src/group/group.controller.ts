@@ -82,4 +82,11 @@ export class GroupController {
       requestUserId,
     );
   }
+
+  @Post(':groupId/leave')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  leaveGroup(@Param('groupId') groupId: string, @Request() req: Request) {
+    const userId = req['user'].sub;
+    return this.groupService.leaveGroup(groupId, userId);
+  }
 }

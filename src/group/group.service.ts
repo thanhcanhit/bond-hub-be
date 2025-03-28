@@ -70,11 +70,7 @@ export class GroupService {
     updateGroupDto: UpdateGroupDto,
     requestUserId: string,
   ): Promise<Group> {
-    const { group } = await this.validateGroupAccess(
-      id,
-      requestUserId,
-      'update group details',
-    );
+    await this.validateGroupAccess(id, requestUserId, 'update group details');
 
     try {
       return await this.prisma.group.update({
@@ -322,5 +318,42 @@ export class GroupService {
       leader,
       coLeaders,
     };
+  }
+
+  async leaveGroup(groupId: string, userId: string): Promise<void> {
+    const group = await this.prisma.group.findUnique({
+      where: { id: groupId },
+      include: {
+        members: true,
+      },
+    });
+
+    if (!group) {
+      throw new NotFoundException(`Group with ID ${groupId} not found`);
+    }
+
+    const userMembership = group.members.find(
+      (member) => member.userId === userId,
+    );
+
+    if (!userMembership) {
+      throw new NotFoundException(
+        `User ${userId} is not a member of group ${groupId}`,
+      );
+    }
+
+    // Check if user is the leader
+    if (userMembership.role === GroupRole.LEADER) {
+      throw new ForbiddenException(
+        'Group leader cannot leave the group. Transfer leadership to another member first.',
+      );
+    }
+
+    // Remove the user from the group
+    await this.prisma.groupMember.delete({
+      where: {
+        id: userMembership.id,
+      },
+    });
   }
 }
