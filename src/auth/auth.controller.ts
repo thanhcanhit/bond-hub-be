@@ -7,6 +7,10 @@ import {
   UnauthorizedException,
   BadRequestException,
   Logger,
+  Put,
+  UseGuards,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Request } from 'express';
@@ -19,9 +23,11 @@ import { VerifyForgotPasswordOtpDto } from './dto/verify-forgot-password-otp.dto
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Public } from './public.decorator';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateBasicInfoDto } from './dto/update-basic-info.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('auth')
-@Public()
 export class AuthController {
   private readonly logger = new Logger('AuthController');
 
@@ -112,5 +118,51 @@ export class AuthController {
       resetDto.resetId,
       resetDto.newPassword,
     );
+  }
+
+  @Put('change-password')
+  // @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @Body() changePasswordDto: ChangePasswordDto,
+    @Req() request: Request,
+  ) {
+    // const userId = request.['user'].sub;
+    // return this.authService.changePassword(
+    //   userId,
+    //   changePasswordDto.currentPassword,
+    //   changePasswordDto.newPassword,
+    // );
+  }
+
+  @Put('update-basic-info')
+  // @UseGuards(JwtAuthGuard)
+  async updateBasicInfo(
+    @Body() updateBasicInfoDto: UpdateBasicInfoDto,
+    @Req() request: Request,
+  ) {
+    // const userId = request['user'].sub;
+    // return this.authService.updateBasicInfo(userId, updateBasicInfoDto);
+  }
+
+  @Put('update-profile-picture')
+  // @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async updateProfilePicture(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() request: Request,
+  ) {
+    // const userId = request['user'].sub;
+    // return this.authService.updateProfilePicture(userId, file);
+  }
+
+  @Put('update-cover-image')
+  // @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async updateCoverImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() request: Request,
+  ) {
+    // const userId = request['user'].sub;
+    // return this.authService.updateCoverImage(userId, file);
   }
 }
