@@ -12,8 +12,8 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
+import { Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
-import { Request } from 'express';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { InitiateRegistrationDto } from './dto/initiate-registration.dto';
@@ -52,7 +52,7 @@ export class AuthController {
   }
 
   @Post('login')
-  async login(@Body() loginDto: LoginDto, @Req() request: Request) {
+  async login(@Body() loginDto: LoginDto, @Req() request: ExpressRequest) {
     this.logger.log(
       `Login request - Email/Phone: ${loginDto.email || loginDto.phoneNumber}, DeviceType: ${
         loginDto.deviceType
@@ -121,48 +121,44 @@ export class AuthController {
   }
 
   @Put('change-password')
-  // @UseGuards(JwtAuthGuard)
   async changePassword(
     @Body() changePasswordDto: ChangePasswordDto,
     @Req() request: Request,
   ) {
-    // const userId = request.['user'].sub;
-    // return this.authService.changePassword(
-    //   userId,
-    //   changePasswordDto.currentPassword,
-    //   changePasswordDto.newPassword,
-    // );
+    const userId = request['user'].sub;
+    return this.authService.changePassword(
+      userId,
+      changePasswordDto.currentPassword,
+      changePasswordDto.newPassword,
+    );
   }
 
   @Put('update-basic-info')
-  // @UseGuards(JwtAuthGuard)
   async updateBasicInfo(
     @Body() updateBasicInfoDto: UpdateBasicInfoDto,
     @Req() request: Request,
   ) {
-    // const userId = request['user'].sub;
-    // return this.authService.updateBasicInfo(userId, updateBasicInfoDto);
+    const userId = request['user'].sub;
+    return this.authService.updateBasicInfo(userId, updateBasicInfoDto);
   }
 
   @Put('update-profile-picture')
-  // @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('file'))
   async updateProfilePicture(
     @UploadedFile() file: Express.Multer.File,
     @Req() request: Request,
   ) {
-    // const userId = request['user'].sub;
-    // return this.authService.updateProfilePicture(userId, file);
+    const userId = request['user'].sub;
+    return this.authService.updateProfilePicture(userId, file);
   }
 
   @Put('update-cover-image')
-  // @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('file'))
   async updateCoverImage(
     @UploadedFile() file: Express.Multer.File,
     @Req() request: Request,
   ) {
-    // const userId = request['user'].sub;
-    // return this.authService.updateCoverImage(userId, file);
+    const userId = request['user'].sub;
+    return this.authService.updateCoverImage(userId, file);
   }
 }
