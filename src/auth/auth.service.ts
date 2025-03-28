@@ -583,7 +583,7 @@ export class AuthService {
           .split('/')
           .pop();
         if (oldPath) {
-          await this.storageService.deleteFile(oldPath, 'profile-pictures');
+          await this.storageService.deleteFile(oldPath, 'avatars');
         }
       } catch (error) {
         this.logger.warn('Failed to delete old profile picture', error);
@@ -593,7 +593,7 @@ export class AuthService {
     // Upload new profile picture
     const [uploadedFile] = await this.storageService.uploadFiles(
       [file],
-      'profile-pictures',
+      'avatars',
       userId,
     );
 
@@ -632,7 +632,7 @@ export class AuthService {
           .split('/')
           .pop();
         if (oldPath) {
-          await this.storageService.deleteFile(oldPath, 'cover-images');
+          await this.storageService.deleteFile(oldPath, 'backgrounds');
         }
       } catch (error) {
         this.logger.warn('Failed to delete old cover image', error);
@@ -642,7 +642,7 @@ export class AuthService {
     // Upload new cover image
     const [uploadedFile] = await this.storageService.uploadFiles(
       [file],
-      'cover-images',
+      'backgrounds',
       userId,
     );
 

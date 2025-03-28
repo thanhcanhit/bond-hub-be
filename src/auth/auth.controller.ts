@@ -11,6 +11,7 @@ import {
   UseGuards,
   UploadedFile,
   UseInterceptors,
+  ValidationPipe,
 } from '@nestjs/common';
 import { Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
@@ -34,11 +35,13 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register/initiate')
+  @Public()
   async initiateRegistration(@Body() initiateDto: InitiateRegistrationDto) {
     return this.authService.initiateRegistration(initiateDto);
   }
 
   @Post('register/verify')
+  @Public()
   async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
     return this.authService.verifyOtp(
       verifyOtpDto.registrationId,
@@ -47,11 +50,13 @@ export class AuthController {
   }
 
   @Post('register/complete')
+  @Public()
   async completeRegistration(@Body() completeDto: CompleteRegistrationDto) {
     return this.authService.completeRegistration(completeDto);
   }
 
   @Post('login')
+  @Public()
   async login(@Body() loginDto: LoginDto, @Req() request: ExpressRequest) {
     this.logger.log(
       `Login request - Email/Phone: ${loginDto.email || loginDto.phoneNumber}, DeviceType: ${
@@ -78,6 +83,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Public()
   async refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
     this.logger.log(
       `Token refresh request - DeviceId: ${refreshTokenDto.deviceId}`,
@@ -100,11 +106,13 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @Public()
   async initiateForgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
     return this.authService.initiateForgotPassword(forgotPasswordDto);
   }
 
   @Post('forgot-password/verify')
+  @Public()
   async verifyForgotPasswordOtp(@Body() verifyDto: VerifyForgotPasswordOtpDto) {
     return this.authService.verifyForgotPasswordOtp(
       verifyDto.resetId,
@@ -113,6 +121,7 @@ export class AuthController {
   }
 
   @Post('forgot-password/reset')
+  @Public()
   async resetPassword(@Body() resetDto: ResetPasswordDto) {
     return this.authService.resetPassword(
       resetDto.resetId,
@@ -135,7 +144,8 @@ export class AuthController {
 
   @Put('update-basic-info')
   async updateBasicInfo(
-    @Body() updateBasicInfoDto: UpdateBasicInfoDto,
+    @Body(new ValidationPipe({ transform: true }))
+    updateBasicInfoDto: UpdateBasicInfoDto,
     @Req() request: Request,
   ) {
     const userId = request['user'].sub;

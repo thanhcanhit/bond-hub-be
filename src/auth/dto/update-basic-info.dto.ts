@@ -1,4 +1,5 @@
 import { IsString, IsOptional, IsEnum, IsDateString } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { Gender } from '@prisma/client';
 
 export class UpdateBasicInfoDto {
@@ -8,7 +9,13 @@ export class UpdateBasicInfoDto {
 
   @IsDateString()
   @IsOptional()
-  dateOfBirth?: Date;
+  @Transform(({ value }) => {
+    if (!value) return undefined;
+    // Ensure the date is in ISO format with time
+    const date = new Date(value);
+    return date.toISOString();
+  })
+  dateOfBirth?: string;
 
   @IsEnum(Gender)
   @IsOptional()
