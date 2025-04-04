@@ -28,10 +28,7 @@ import { StorageModule } from '../storage/storage.module';
     MailModule,
     SmsModule,
     RedisCacheModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '15m' },
-    }),
+    StorageModule,
   ],
   controllers: [AuthController],
   providers: [
