@@ -87,44 +87,30 @@ export class AuthService {
       (token) => token.deviceType === deviceInfo.deviceType,
     );
 
-    // Check if trying to login with mobile/tablet when the other type is active
-    const hasMobileSession = activeTokens.some(
-      (token) => token.deviceType === 'MOBILE',
-    );
-    const hasTabletSession = activeTokens.some(
-      (token) => token.deviceType === 'TABLET',
+    // Check if there's a mobile/tablet session that needs to be revoked
+    const mobileTabletSession = activeTokens.find(
+      (token) =>
+        (deviceInfo.deviceType === 'MOBILE' && token.deviceType === 'TABLET') ||
+        (deviceInfo.deviceType === 'TABLET' && token.deviceType === 'MOBILE'),
     );
 
-    // Prevent mobile login if tablet is active and vice versa
-    if (
-      (deviceInfo.deviceType === 'MOBILE' && hasTabletSession) ||
-      (deviceInfo.deviceType === 'TABLET' && hasMobileSession)
-    ) {
-      this.logger.warn(
-        `Login blocked - Attempted ${deviceInfo.deviceType} login while ${
-          hasTabletSession ? 'TABLET' : 'MOBILE'
-        } session is active for user: ${user.id}`,
-      );
-      throw new BadRequestException(
-        'Cannot login on mobile and tablet simultaneously',
-      );
-    }
+    // If there's an existing session for this device type or a mobile/tablet session, revoke it
+    const sessionsToRevoke = [
+      existingDeviceTypeSession,
+      mobileTabletSession,
+    ].filter(Boolean); // Remove null/undefined values
 
-    // If there's an existing session for this device type, revoke it
-    if (existingDeviceTypeSession) {
+    for (const sessionToRevoke of sessionsToRevoke) {
       this.logger.log(
-        `Revoking existing session - UserId: ${user.id}, DeviceType: ${existingDeviceTypeSession.deviceType}, DeviceId: ${existingDeviceTypeSession.id}`,
+        `Revoking existing session - UserId: ${user.id}, DeviceType: ${sessionToRevoke.deviceType}, DeviceId: ${sessionToRevoke.id}`,
       );
+
       await this.prisma.refreshToken.update({
-        where: { id: existingDeviceTypeSession.id },
+        where: { id: sessionToRevoke.id },
         data: { isRevoked: true },
       });
-
       // Notify the existing device about logout
-      await this.authGateway.notifyDeviceLogout(
-        user.id,
-        existingDeviceTypeSession.id,
-      );
+      await this.authGateway.notifyDeviceLogout(user.id, sessionToRevoke.id);
     }
 
     // Generate tokens
@@ -134,21 +120,7 @@ export class AuthService {
       `Login successful - UserId: ${user.id}, DeviceType: ${deviceInfo.deviceType}, DeviceId: ${tokens.deviceId}`,
     );
 
-    return {
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        phoneNumber: user.phoneNumber,
-        fullName: user.userInfo?.fullName,
-      },
-      device: {
-        id: tokens.deviceId,
-        name: deviceInfo.deviceName,
-        type: deviceInfo.deviceType,
-      },
-    };
+    return tokens;
   }
 
   private async generateTokens(userId: string, deviceInfo: any) {
