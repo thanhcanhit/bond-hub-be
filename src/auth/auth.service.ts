@@ -120,7 +120,14 @@ export class AuthService {
       `Login successful - UserId: ${user.id}, DeviceType: ${deviceInfo.deviceType}, DeviceId: ${tokens.deviceId}`,
     );
 
-    return tokens;
+    return {
+      ...tokens,
+      user: {
+        userId: user.id,
+        email: user.email,
+        fullName: user.userInfo?.fullName,
+      },
+    };
   }
 
   private async generateTokens(userId: string, deviceInfo: any) {
