@@ -130,7 +130,7 @@ export class AuthService {
     };
   }
 
-  private async generateTokens(userId: string, deviceInfo: any) {
+  async generateTokens(userId: string, deviceInfo: any) {
     const accessToken = this.jwtService.sign({
       sub: userId,
       deviceType: deviceInfo.deviceType,
