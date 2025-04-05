@@ -11,12 +11,11 @@ export class QrCodeCleanupTask {
 
   @Cron('*/5 * * * *') // Chạy mỗi 5 phút
   async handleCron() {
-    this.logger.debug('Running QR Code cleanup task...');
     const now = new Date();
 
     // Xóa các mã QR đã hết hạn
     const result = await this.prisma.qrCode.deleteMany({
-      where: { expiresAt: { lt: now }, status: { not: 'CONFIRMED' } },
+      where: { expiresAt: { lt: now } },
     });
 
     this.logger.debug(`Deleted ${result.count} expired QR Codes.`);
