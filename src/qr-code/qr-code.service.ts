@@ -112,7 +112,7 @@ export class QrCodeService {
     const { accessToken, refreshToken } = await this.authService.generateTokens(
       user.id,
       {
-        deviceType: 'OTHER',
+        deviceType: 'WEB',
         deviceName: 'QR Code Login',
       },
     );
@@ -120,7 +120,7 @@ export class QrCodeService {
     const deviceInfo = {
       id: uuidv4(),
       name: 'QR Code Login',
-      type: 'OTHER',
+      type: 'WEB',
     };
 
     console.log(
