@@ -231,6 +231,11 @@ export class AuthService {
   }
 
   async initiateRegistration(data: InitiateRegistrationDto) {
+    this.logger.log('Starting registration process', {
+      email: data.email,
+      phoneNumber: data.phoneNumber,
+    });
+
     // Check if at least email or phone number is provided
     if (!data.email && !data.phoneNumber) {
       throw new BadRequestException('Either email or phone number is required');
@@ -258,17 +263,15 @@ export class AuthService {
     const otp = this.generateOtp();
     const registrationId = uuidv4();
 
+    this.logger.debug('Generated registration data', { registrationId });
+
     // Store registration data and OTP in Redis
     await this.cacheService.set(
       `registration:${registrationId}`,
       JSON.stringify(data),
-      300, // 5 minutes expiry
+      300,
     );
-    await this.cacheService.set(
-      `otp:${registrationId}`,
-      otp,
-      300, // 5 minutes expiry
-    );
+    await this.cacheService.set(`otp:${registrationId}`, otp, 300);
 
     // Send OTP via email if email is provided
     if (data.email) {
@@ -276,6 +279,7 @@ export class AuthService {
       if (!emailSent) {
         throw new BadRequestException('Failed to send OTP email');
       }
+      this.logger.log('OTP email sent successfully');
     }
 
     // Send OTP via SMS if phone number is provided
@@ -284,8 +288,10 @@ export class AuthService {
       if (!smsSent) {
         throw new BadRequestException('Failed to send OTP SMS');
       }
+      this.logger.log('OTP SMS processed successfully');
     }
 
+    this.logger.log('Registration initiated successfully', { registrationId });
     return {
       message: 'OTP sent successfully',
       registrationId,
