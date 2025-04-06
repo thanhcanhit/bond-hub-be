@@ -1,63 +1,55 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as twilio from 'twilio';
+import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 
 @Injectable()
 export class SmsService {
-  private readonly twilioClient: twilio.Twilio;
-  private readonly logger = new Logger('SmsService');
-  private readonly isTrial: boolean;
+  private readonly snsClient: SNSClient;
+  private readonly logger = new Logger(SmsService.name);
   private readonly isTestMode: boolean;
 
   constructor(private configService: ConfigService) {
-    const accountSid = this.configService.get<string>('TWILIO_ACCOUNT_SID');
-    const authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN');
-    const fromNumber = this.configService.get<string>('TWILIO_PHONE_NUMBER');
-    this.isTrial = this.configService.get<boolean>('TWILIO_IS_TRIAL') ?? true;
-    this.isTestMode = this.configService.get<boolean>('SMS_TEST_MODE') ?? false;
+    // Kiểm tra xem biến SMS_TEST_MODE có tồn tại trong env không
+    const hasTestMode =
+      this.configService.get<string>('SMS_TEST_MODE') !== undefined;
+    this.isTestMode = hasTestMode;
 
-    // Skip Twilio initialization in test mode
-    if (this.isTestMode) {
+    this.logger.log(
+      `SMS Service Test Mode: ${this.isTestMode ? 'Enabled (OTP will be logged)' : 'Disabled (OTP will be sent via SNS)'}`,
+    );
+
+    if (!this.isTestMode) {
+      const region = this.configService.get<string>('AWS_REGION');
+      const accessKeyId = this.configService.get<string>('AWS_ACCESS_KEY_ID');
+      const secretAccessKey = this.configService.get<string>(
+        'AWS_SECRET_ACCESS_KEY',
+      );
+
+      if (!region || !accessKeyId || !secretAccessKey) {
+        this.logger.error('Missing AWS configuration', {
+          region: !!region,
+          accessKeyId: !!accessKeyId,
+          secretAccessKey: !!secretAccessKey,
+        });
+        return;
+      }
+
+      try {
+        this.snsClient = new SNSClient({
+          region,
+          credentials: {
+            accessKeyId,
+            secretAccessKey,
+          },
+        });
+        this.logger.log('AWS SNS client initialized successfully');
+      } catch (error) {
+        this.logger.error('Failed to initialize AWS SNS client:', error);
+      }
+    } else {
       this.logger.warn(
-        'SMS Service running in TEST MODE - No real SMS will be sent',
+        'SMS Service running in TEST MODE - OTP will be logged instead of sent',
       );
-      return;
-    }
-
-    if (!accountSid || !authToken || !fromNumber) {
-      this.logger.error('Missing Twilio configuration', {
-        accountSid: !!accountSid,
-        authToken: !!authToken,
-        fromNumber: !!fromNumber,
-      });
-      return;
-    }
-
-    // Validate Account SID format
-    if (!accountSid.startsWith('AC')) {
-      this.logger.error(
-        'Invalid Twilio Account SID format - Must start with AC',
-      );
-      return;
-    }
-
-    // Validate phone number format
-    if (!fromNumber.startsWith('+')) {
-      this.logger.error(
-        'Invalid Twilio phone number format - Must start with + and include country code',
-      );
-      return;
-    }
-
-    try {
-      this.twilioClient = twilio(accountSid, authToken);
-      this.logger.log('Twilio client initialized successfully', {
-        fromNumber,
-        isTrial: this.isTrial,
-        isTestMode: this.isTestMode,
-      });
-    } catch (error) {
-      this.logger.error('Failed to initialize Twilio client:', error);
     }
   }
 
@@ -73,14 +65,50 @@ export class SmsService {
     // Add the '+' prefix
     const formatted = '+' + cleaned;
     this.logger.debug(`Formatted phone number: ${phoneNumber} -> ${formatted}`);
+    this.logger.log(formatted);
     return formatted;
   }
 
   async sendOtp(phoneNumber: string, otp: string): Promise<boolean> {
     try {
-      // TODO: Implement actual SMS sending logic here
-      // For now, just log the OTP
-      this.logger.debug(`Sending OTP ${otp} to ${phoneNumber}`);
+      if (this.isTestMode) {
+        this.logger.warn('TEST MODE: Not sending actual SMS');
+        this.logger.debug(`Phone number: ${phoneNumber}`);
+        this.logger.debug(`OTP code: ${otp}`);
+        return true;
+      }
+
+      const formattedPhoneNumber =
+        this.formatVietnamesePhoneNumber(phoneNumber);
+      const message = `Your OTP is: ${otp}. This code will expire in 5 minutes.`;
+
+      if (!this.snsClient) {
+        this.logger.error('SNS client not initialized');
+        return false;
+      }
+
+      const command = new PublishCommand({
+        Message: message,
+        PhoneNumber: formattedPhoneNumber,
+        MessageAttributes: {
+          'AWS.SNS.SMS.SMSType': {
+            DataType: 'String',
+            StringValue: 'Transactional',
+          },
+          'AWS.SNS.SMS.SenderID': {
+            DataType: 'String',
+            StringValue:
+              this.configService.get<string>('AWS_SNS_SENDER_ID') || 'BondHub',
+          },
+        },
+      });
+
+      const response = await this.snsClient.send(command);
+      this.logger.debug('SMS sent successfully', {
+        messageId: response.MessageId,
+        phoneNumber: formattedPhoneNumber,
+      });
+
       return true;
     } catch (error) {
       this.logger.error(`Failed to send OTP to ${phoneNumber}:`, error);
