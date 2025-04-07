@@ -18,9 +18,9 @@ export class MailService {
     try {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const data = await this.resend.emails.send({
-        from: 'hoangkhang@bondhub.cloud',
+        from: 'vodka@bondhub.cloud',
         to: [email],
-        subject: 'Your OTP Code for Bond Hub',
+        subject: 'Your OTP Code for Vodka',
         html: `
           <!DOCTYPE html>
           <html>
@@ -44,8 +44,8 @@ export class MailService {
             ">
               <!-- Header with Logo -->
               <div style="text-align: center; margin-bottom: 30px;">
-                <img src="https://res.cloudinary.com/dgzdgilho/image/upload/v1741426892/myimage_lrgwkr.jpg" 
-                     alt="Bond Hub Logo" 
+                <img src="https://res.cloudinary.com/dy9b2kamp/image/upload/v1744007142/z6451928408945_3421fa5e5c7af0e49c813a8a68a4a95a_mof1zh.jpg" 
+                     alt="Vodka Logo" 
                      style="width: 150px; height: auto;"
                 />
               </div>
@@ -53,7 +53,7 @@ export class MailService {
               <!-- Welcome Text -->
               <div style="text-align: center; margin-bottom: 30px;">
                 <h1 style="
-                  color: #FF6B00;
+                  color: #004eab;
                   font-size: 28px;
                   margin: 0;
                   padding: 0;
@@ -68,7 +68,7 @@ export class MailService {
               <!-- OTP Box -->
               <div style="
                 background-color: #FFF8F3;
-                border: 2px solid #FF6B00;
+                border: 2px solid #004eab;
                 border-radius: 8px;
                 padding: 30px;
                 text-align: center;
@@ -77,7 +77,7 @@ export class MailService {
                 <p style="
                   font-size: 36px;
                   font-weight: bold;
-                  color: #FF6B00;
+                  color: #004eab;
                   letter-spacing: 8px;
                   margin: 0;
                   padding: 0;
@@ -116,7 +116,7 @@ export class MailService {
                   color: #333333;
                   font-size: 14px;
                   margin: 0;
-                ">© 2024 Bond Hub. All rights reserved.</p>
+                ">© 2025 Vodka. All rights reserved.</p>
               </div>
             </div>
           </body>
