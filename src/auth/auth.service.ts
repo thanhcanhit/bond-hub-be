@@ -17,6 +17,8 @@ import { InitiateRegistrationDto } from './dto/initiate-registration.dto';
 import { CompleteRegistrationDto } from './dto/complete-registration.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { UpdateBasicInfoDto } from './dto/update-basic-info.dto';
+import { InitiateUpdateEmailDto } from './dto/initiate-update-email.dto';
+import { InitiateUpdatePhoneDto } from './dto/initiate-update-phone.dto';
 
 @Injectable()
 export class AuthService {
@@ -667,6 +669,188 @@ export class AuthService {
     return {
       message: 'Cover image updated successfully',
       url: uploadedFile.url,
+    };
+  }
+
+  async initiateUpdateEmail(userId: string, updateDto: InitiateUpdateEmailDto) {
+    this.logger.log(`Initiating email update for user ${userId}`);
+
+    // Check if user exists
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Check if email is already in use
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: updateDto.newEmail },
+    });
+
+    if (existingUser && existingUser.id !== userId) {
+      throw new BadRequestException('Email is already in use');
+    }
+
+    // Generate OTP and update ID
+    const otp = this.generateOtp();
+    const updateId = uuidv4();
+
+    // Store update data and OTP in Redis
+    await this.cacheService.set(
+      `update_email:${updateId}`,
+      JSON.stringify({
+        userId,
+        newEmail: updateDto.newEmail,
+      }),
+      300, // 5 minutes expiry
+    );
+    await this.cacheService.set(
+      `update_email_otp:${updateId}`,
+      otp,
+      300, // 5 minutes expiry
+    );
+
+    // Send OTP via email to the new email address
+    const emailSent = await this.mailService.sendOtpEmail(
+      updateDto.newEmail,
+      otp,
+    );
+    if (!emailSent) {
+      throw new BadRequestException('Failed to send OTP email');
+    }
+
+    this.logger.log(`Email update OTP sent to ${updateDto.newEmail}`);
+    return {
+      message: 'OTP sent successfully to your new email',
+      updateId,
+    };
+  }
+
+  async initiateUpdatePhone(userId: string, updateDto: InitiateUpdatePhoneDto) {
+    this.logger.log(`Initiating phone update for user ${userId}`);
+
+    // Check if user exists
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Check if phone number is already in use
+    const existingUser = await this.prisma.user.findUnique({
+      where: { phoneNumber: updateDto.newPhoneNumber },
+    });
+
+    if (existingUser && existingUser.id !== userId) {
+      throw new BadRequestException('Phone number is already in use');
+    }
+
+    // Generate OTP and update ID
+    const otp = this.generateOtp();
+    const updateId = uuidv4();
+
+    // Store update data and OTP in Redis
+    await this.cacheService.set(
+      `update_phone:${updateId}`,
+      JSON.stringify({
+        userId,
+        newPhoneNumber: updateDto.newPhoneNumber,
+      }),
+      300, // 5 minutes expiry
+    );
+    await this.cacheService.set(
+      `update_phone_otp:${updateId}`,
+      otp,
+      300, // 5 minutes expiry
+    );
+
+    // Send OTP via SMS to the new phone number
+    const smsSent = await this.smsService.sendOtp(
+      updateDto.newPhoneNumber,
+      otp,
+    );
+    if (!smsSent) {
+      throw new BadRequestException('Failed to send OTP SMS');
+    }
+
+    this.logger.log(`Phone update OTP sent to ${updateDto.newPhoneNumber}`);
+    return {
+      message: 'OTP sent successfully to your new phone number',
+      updateId,
+    };
+  }
+
+  async verifyUpdateEmailOtp(updateId: string, otp: string) {
+    this.logger.log(`Verifying email update OTP for updateId ${updateId}`);
+
+    // Get stored OTP and update data
+    const storedOtp = await this.cacheService.get(
+      `update_email_otp:${updateId}`,
+    );
+    const updateData = await this.cacheService.get(`update_email:${updateId}`);
+
+    if (!storedOtp || !updateData) {
+      throw new BadRequestException('Update session expired');
+    }
+
+    if (storedOtp !== otp) {
+      throw new BadRequestException('Invalid OTP');
+    }
+
+    const { userId, newEmail } = JSON.parse(updateData);
+
+    // Update user's email
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { email: newEmail },
+    });
+
+    // Clean up Redis data
+    await this.cacheService.del(`update_email_otp:${updateId}`);
+    await this.cacheService.del(`update_email:${updateId}`);
+
+    this.logger.log(`Email updated successfully for user ${userId}`);
+    return {
+      message: 'Email updated successfully',
+    };
+  }
+
+  async verifyUpdatePhoneOtp(updateId: string, otp: string) {
+    this.logger.log(`Verifying phone update OTP for updateId ${updateId}`);
+
+    // Get stored OTP and update data
+    const storedOtp = await this.cacheService.get(
+      `update_phone_otp:${updateId}`,
+    );
+    const updateData = await this.cacheService.get(`update_phone:${updateId}`);
+
+    if (!storedOtp || !updateData) {
+      throw new BadRequestException('Update session expired');
+    }
+
+    if (storedOtp !== otp) {
+      throw new BadRequestException('Invalid OTP');
+    }
+
+    const { userId, newPhoneNumber } = JSON.parse(updateData);
+
+    // Update user's phone number
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { phoneNumber: newPhoneNumber },
+    });
+
+    // Clean up Redis data
+    await this.cacheService.del(`update_phone_otp:${updateId}`);
+    await this.cacheService.del(`update_phone:${updateId}`);
+
+    this.logger.log(`Phone number updated successfully for user ${userId}`);
+    return {
+      message: 'Phone number updated successfully',
     };
   }
 }
