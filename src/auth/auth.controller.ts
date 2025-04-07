@@ -27,6 +27,9 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateBasicInfoDto } from './dto/update-basic-info.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { InitiateUpdateEmailDto } from './dto/initiate-update-email.dto';
+import { InitiateUpdatePhoneDto } from './dto/initiate-update-phone.dto';
+import { VerifyUpdateOtpDto } from './dto/verify-update-otp.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -169,6 +172,55 @@ export class AuthController {
     @Req() request: Request,
   ) {
     const userId = request['user'].sub;
+    this.logger.log(
+      `Update cover image request - UserId: ${userId}, FileSize: ${file?.size || 'N/A'}`,
+    );
     return this.authService.updateCoverImage(userId, file);
+  }
+
+  @Post('update-email/initiate')
+  async initiateUpdateEmail(
+    @Body() updateEmailDto: InitiateUpdateEmailDto,
+    @Req() request: Request,
+  ) {
+    const userId = request['user'].sub;
+    this.logger.log(
+      `Initiate email update request - UserId: ${userId}, NewEmail: ${updateEmailDto.newEmail}`,
+    );
+    return this.authService.initiateUpdateEmail(userId, updateEmailDto);
+  }
+
+  @Post('update-email/verify')
+  async verifyUpdateEmailOtp(@Body() verifyDto: VerifyUpdateOtpDto) {
+    this.logger.log(
+      `Verify email update OTP request - UpdateId: ${verifyDto.updateId}`,
+    );
+    return this.authService.verifyUpdateEmailOtp(
+      verifyDto.updateId,
+      verifyDto.otp,
+    );
+  }
+
+  @Post('update-phone/initiate')
+  async initiateUpdatePhone(
+    @Body() updatePhoneDto: InitiateUpdatePhoneDto,
+    @Req() request: Request,
+  ) {
+    const userId = request['user'].sub;
+    this.logger.log(
+      `Initiate phone update request - UserId: ${userId}, NewPhone: ${updatePhoneDto.newPhoneNumber}`,
+    );
+    return this.authService.initiateUpdatePhone(userId, updatePhoneDto);
+  }
+
+  @Post('update-phone/verify')
+  async verifyUpdatePhoneOtp(@Body() verifyDto: VerifyUpdateOtpDto) {
+    this.logger.log(
+      `Verify phone update OTP request - UpdateId: ${verifyDto.updateId}`,
+    );
+    return this.authService.verifyUpdatePhoneOtp(
+      verifyDto.updateId,
+      verifyDto.otp,
+    );
   }
 }
