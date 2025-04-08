@@ -1,6 +1,14 @@
-import { Controller, Get, Param, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  NotFoundException,
+  Post,
+  Body,
+} from '@nestjs/common';
 
 import { UserService } from './user.service';
+import { SearchUserDto } from './dto/search-user.dto';
 
 @Controller('users')
 export class UserController {
@@ -27,5 +35,29 @@ export class UserController {
       throw new NotFoundException('User info not found');
     }
     return userInfo;
+  }
+
+  @Post('search')
+  async searchUser(@Body() searchUserDto: SearchUserDto) {
+    try {
+      return await this.userService.searchUserByEmailOrPhone(
+        searchUserDto.email,
+        searchUserDto.phoneNumber,
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      // Nếu có lỗi khác, trả về thông báo lỗi dựa trên loại tìm kiếm
+      if (searchUserDto.email) {
+        throw new NotFoundException(
+          'Email chưa đăng ký tài khoản hoặc không cho phép tìm kiếm',
+        );
+      } else {
+        throw new NotFoundException(
+          'Số điện thoại chưa đăng ký tài khoản hoặc không cho phép tìm kiếm',
+        );
+      }
+    }
   }
 }
