@@ -24,8 +24,8 @@ model User {
   groupMembers     GroupMember[]  @relation(name: "GroupMemberToUser")
   cloudFiles       CloudStorage[] @relation(name: "CloudStorageToUser")
   pinnedItems      PinnedItem[]   @relation(name: "PinnedItemToUser")
-  sentFriends      Friend[]       @relation(name: "UserOne")
-  receivedFriends  Friend[]       @relation(name: "UserTwo")
+  sentFriends      Friend[]       @relation(name: "SenderUser")
+  receivedFriends  Friend[]       @relation(name: "ReceiverUser")
   contacts         Contact[]      @relation(name: "UserContacts")
   contactOf        Contact[]      @relation(name: "ContactUser")
   settings         UserSetting[]  @relation(name: "UserToUserSetting")
@@ -59,15 +59,15 @@ model UserInfo {
 }
 
 model Friend {
-  id        String       @id @default(uuid()) @map("friendship_id") @db.Uuid
-  userOne   User         @relation(name: "UserOne", fields: [userOneId], references: [id])
-  userOneId String       @map("user_id_1") @db.Uuid
-  userTwo   User         @relation(name: "UserTwo", fields: [userTwoId], references: [id])
-  userTwoId String       @map("user_id_2") @db.Uuid
-  status    FriendStatus @default(PENDING)
-  createdAt DateTime     @default(now()) @map("created_at")
-  updatedAt DateTime     @updatedAt @map("updated_at")
-
+  id           String       @id @default(uuid()) @map("friendship_id") @db.Uuid
+  sender       User         @relation(name: "SenderUser", fields: [senderId], references: [id])
+  senderId     String       @map("sender_id") @db.Uuid
+  receiver     User         @relation(name: "ReceiverUser", fields: [receiverId], references: [id])
+  receiverId   String       @map("receiver_id") @db.Uuid
+  status       FriendStatus @default(PENDING)
+  introducedBy String?      @map("introduced_by") @db.Uuid
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
   @@map("friends")
 }
 
