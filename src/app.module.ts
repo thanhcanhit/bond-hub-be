@@ -9,6 +9,7 @@ import { GroupModule } from './group/group.module';
 import { QrCodeModule } from './qr-code/qr-code.module';
 import { MessageModule } from './message/message.module';
 import { StorageModule } from './storage/storage.module';
+import { FriendModule } from './friend/friend.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { StorageModule } from './storage/storage.module';
     GroupModule,
     MessageModule,
     StorageModule,
+    FriendModule,
   ],
   controllers: [AppController],
   providers: [AppService],

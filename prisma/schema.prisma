@@ -310,6 +310,8 @@ enum QrCodeStatus {
   CONFIRMED
   EXPIRED
   CANCELLED
+  FRIEND_REQUEST
+  FRIEND_CONFIRMED
 }
 
 enum ReactionType {

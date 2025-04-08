@@ -2,10 +2,11 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { QrCodeGateway } from './qr-code.gateway';
-import { QrCodeStatus } from '@prisma/client';
+import { QrCodeStatus, FriendStatus } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -212,7 +213,11 @@ export class QrCodeService {
         throw new NotFoundException('QR Code not found');
       }
 
-      if (new Date() > qrCode.expiresAt) {
+      // Kiểm tra thời hạn QR code, trừ QR code kết bạn
+      if (
+        new Date() > qrCode.expiresAt &&
+        qrCode.status !== QrCodeStatus.FRIEND_REQUEST
+      ) {
         throw new BadRequestException('QR Code has expired');
       }
 
@@ -257,5 +262,305 @@ export class QrCodeService {
       console.error('Error deleting QR code:', error);
       // Don't throw the error as this is a cleanup operation
     }
+  }
+
+  // Tạo QR code kết bạn
+  async generateFriendQrCode(userId: string) {
+    // Kiểm tra người dùng có tồn tại không
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { userInfo: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    // Tạo QR token
+    const qrToken = `friend-${Math.random().toString(36).substring(2, 15)}`;
+    // QR code kết bạn không có thời hạn, nhưng để tương thích với hệ thống hiện tại,
+    // đặt thời hạn rất dài (10 năm)
+    const expiresAt = new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000);
+
+    // Tạo QR code
+    const qrCode = await this.prisma.qrCode.create({
+      data: {
+        qrToken,
+        userId,
+        status: QrCodeStatus.FRIEND_REQUEST,
+        expiresAt,
+      },
+    });
+
+    return {
+      qrToken: qrCode.qrToken,
+      userId: user.id,
+      userInfo: {
+        fullName: user.userInfo?.fullName,
+        profilePictureUrl: user.userInfo?.profilePictureUrl,
+      },
+    };
+  }
+
+  // Quét QR code kết bạn
+  async scanFriendQrCode(qrToken: string, scannerUserId: string) {
+    // Kiểm tra QR code có tồn tại và hợp lệ không
+    const qrCode = await this.findAndValidateQrCode(qrToken);
+
+    // Kiểm tra QR code có phải là QR code kết bạn không
+    if (qrCode.status !== QrCodeStatus.FRIEND_REQUEST) {
+      throw new BadRequestException('QR code không phải là QR code kết bạn');
+    }
+
+    // Kiểm tra người quét có phải là chủ QR code không
+    if (qrCode.userId === scannerUserId) {
+      throw new BadRequestException('Không thể quét QR code của chính mình');
+    }
+
+    // Lấy thông tin người dùng sở hữu QR code
+    const qrOwner = await this.prisma.user.findUnique({
+      where: { id: qrCode.userId },
+      include: { userInfo: true },
+    });
+
+    if (!qrOwner) {
+      throw new NotFoundException('Không tìm thấy người dùng sở hữu QR code');
+    }
+
+    // Kiểm tra xem người dùng có chặn tìm kiếm từ người lạ không
+    if (qrOwner.userInfo?.blockStrangers) {
+      throw new ForbiddenException('Người dùng đã chặn tìm kiếm từ người lạ');
+    }
+
+    // Trả về thông tin người dùng sở hữu QR code
+    return {
+      qrOwnerId: qrOwner.id,
+      email: qrOwner.email,
+      phoneNumber: qrOwner.phoneNumber,
+      userInfo: {
+        fullName: qrOwner.userInfo?.fullName,
+        profilePictureUrl: qrOwner.userInfo?.profilePictureUrl,
+        backgroundImgUrl: qrOwner.userInfo?.coverImgUrl,
+        bio: qrOwner.userInfo?.bio,
+      },
+    };
+  }
+
+  // Gửi lời mời kết bạn qua QR code
+  async sendFriendRequestViaQr(qrToken: string, senderId: string) {
+    // Kiểm tra QR code có tồn tại và hợp lệ không
+    const qrCode = await this.findAndValidateQrCode(qrToken);
+
+    // Kiểm tra QR code có phải là QR code kết bạn không
+    if (qrCode.status !== QrCodeStatus.FRIEND_REQUEST) {
+      throw new BadRequestException('QR code không phải là QR code kết bạn');
+    }
+
+    // Kiểm tra người gửi có phải là chủ QR code không
+    if (qrCode.userId === senderId) {
+      throw new BadRequestException(
+        'Không thể gửi lời mời kết bạn cho chính mình',
+      );
+    }
+
+    // Kiểm tra người dùng có tồn tại không
+    const [sender, receiver] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: senderId },
+        include: { userInfo: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: qrCode.userId },
+        include: { userInfo: true },
+      }),
+    ]);
+
+    if (!sender || !receiver) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    // Kiểm tra xem đã có mối quan hệ bạn bè nào giữa hai người dùng chưa
+    const existingFriendship = await this.prisma.friend.findFirst({
+      where: {
+        OR: [
+          {
+            senderId,
+            receiverId: qrCode.userId,
+          },
+          {
+            senderId: qrCode.userId,
+            receiverId: senderId,
+          },
+        ],
+      },
+    });
+
+    // Nếu đã có mối quan hệ bạn bè
+    if (existingFriendship) {
+      // Nếu đã là bạn bè
+      if (existingFriendship.status === FriendStatus.ACCEPTED) {
+        throw new BadRequestException('Hai người dùng đã là bạn bè');
+      }
+
+      // Nếu đã bị block
+      if (existingFriendship.status === FriendStatus.BLOCKED) {
+        throw new ForbiddenException('Không thể gửi lời mời kết bạn');
+      }
+
+      // Nếu đã bị từ chối, kiểm tra thời gian
+      if (existingFriendship.status === FriendStatus.DECLINED) {
+        const declinedTime = existingFriendship.updatedAt;
+        const currentTime = new Date();
+        const hoursDifference =
+          (currentTime.getTime() - declinedTime.getTime()) / (1000 * 60 * 60);
+
+        // Nếu chưa đủ 48 giờ
+        if (hoursDifference < 48) {
+          throw new ForbiddenException(
+            `Bạn có thể gửi lại lời mời kết bạn sau ${Math.ceil(
+              48 - hoursDifference,
+            )} giờ nữa`,
+          );
+        }
+
+        // Nếu đã đủ 48 giờ, cập nhật lại trạng thái
+        const updatedFriendship = await this.prisma.friend.update({
+          where: { id: existingFriendship.id },
+          data: {
+            status: FriendStatus.PENDING,
+            updatedAt: new Date(),
+          },
+          include: {
+            sender: {
+              select: {
+                id: true,
+                email: true,
+                phoneNumber: true,
+                userInfo: {
+                  select: {
+                    fullName: true,
+                    profilePictureUrl: true,
+                  },
+                },
+              },
+            },
+            receiver: {
+              select: {
+                id: true,
+                email: true,
+                phoneNumber: true,
+                userInfo: {
+                  select: {
+                    fullName: true,
+                    profilePictureUrl: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        // Cập nhật trạng thái QR code
+        await this.prisma.qrCode.update({
+          where: { id: qrCode.id },
+          data: { status: QrCodeStatus.FRIEND_CONFIRMED },
+        });
+
+        return updatedFriendship;
+      }
+
+      // Nếu đang chờ xác nhận
+      if (existingFriendship.status === FriendStatus.PENDING) {
+        // Nếu người gửi hiện tại là người nhận trước đó, tự động chấp nhận
+        if (existingFriendship.receiverId === senderId) {
+          const acceptedFriendship = await this.prisma.friend.update({
+            where: { id: existingFriendship.id },
+            data: {
+              status: FriendStatus.ACCEPTED,
+              updatedAt: new Date(),
+            },
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  email: true,
+                  phoneNumber: true,
+                  userInfo: {
+                    select: {
+                      fullName: true,
+                      profilePictureUrl: true,
+                    },
+                  },
+                },
+              },
+              receiver: {
+                select: {
+                  id: true,
+                  email: true,
+                  phoneNumber: true,
+                  userInfo: {
+                    select: {
+                      fullName: true,
+                      profilePictureUrl: true,
+                    },
+                  },
+                },
+              },
+            },
+          });
+
+          // Cập nhật trạng thái QR code
+          await this.prisma.qrCode.update({
+            where: { id: qrCode.id },
+            data: { status: QrCodeStatus.FRIEND_CONFIRMED },
+          });
+
+          return acceptedFriendship;
+        } else {
+          throw new BadRequestException(
+            'Lời mời kết bạn đã được gửi và đang chờ xác nhận',
+          );
+        }
+      }
+    }
+
+    // Tạo mới lời mời kết bạn
+    const newFriendship = await this.prisma.friend.create({
+      data: {
+        senderId,
+        receiverId: qrCode.userId,
+        status: FriendStatus.PENDING,
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            email: true,
+            phoneNumber: true,
+            userInfo: {
+              select: {
+                fullName: true,
+                profilePictureUrl: true,
+              },
+            },
+          },
+        },
+        receiver: {
+          select: {
+            id: true,
+            email: true,
+            phoneNumber: true,
+            userInfo: {
+              select: {
+                fullName: true,
+                profilePictureUrl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return newFriendship;
   }
 }

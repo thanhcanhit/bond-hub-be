@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { QrCodeService } from './qr-code.service';
 import { Public } from 'src/auth/public.decorator';
+import { ScanFriendQrDto } from './dto/friend-qr.dto';
 
 @Controller('qrcode')
 export class QrCodeController {
@@ -52,5 +53,33 @@ export class QrCodeController {
   async cancelQrCode(@Body('qrToken') qrToken: string) {
     this.logger.log(`Cancelling QR code with token: ${qrToken}`);
     return this.qrCodeService.cancelQrCode(qrToken);
+  }
+
+  // QR code kết bạn
+  @Post('friend/generate')
+  async generateFriendQrCode(@Request() req: Request) {
+    const userId = req['user'].sub;
+    this.logger.log(`Generating friend QR code for user: ${userId}`);
+    return this.qrCodeService.generateFriendQrCode(userId);
+  }
+
+  @Post('friend/scan')
+  async scanFriendQrCode(
+    @Body() dto: ScanFriendQrDto,
+    @Request() req: Request,
+  ) {
+    const userId = req['user'].sub;
+    this.logger.log(`Scanning friend QR code with token: ${dto.qrToken}`);
+    return this.qrCodeService.scanFriendQrCode(dto.qrToken, userId);
+  }
+
+  @Post('friend/request')
+  async sendFriendRequestViaQr(
+    @Body() dto: ScanFriendQrDto,
+    @Request() req: Request,
+  ) {
+    const userId = req['user'].sub;
+    this.logger.log(`Sending friend request via QR code: ${dto.qrToken}`);
+    return this.qrCodeService.sendFriendRequestViaQr(dto.qrToken, userId);
   }
 }
