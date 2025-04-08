@@ -92,6 +92,7 @@ export class UserService {
       userInfo: {
         fullName: user.userInfo?.fullName,
         profilePictureUrl: user.userInfo?.profilePictureUrl,
+        backgroundImgUrl: user.userInfo?.coverImgUrl,
         bio: user.userInfo?.bio,
       },
     };
