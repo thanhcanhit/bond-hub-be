@@ -10,6 +10,7 @@ import { QrCodeModule } from './qr-code/qr-code.module';
 import { MessageModule } from './message/message.module';
 import { StorageModule } from './storage/storage.module';
 import { FriendModule } from './friend/friend.module';
+import { ContactModule } from './contact/contact.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { FriendModule } from './friend/friend.module';
     MessageModule,
     StorageModule,
     FriendModule,
+    ContactModule,
   ],
   controllers: [AppController],
   providers: [AppService],

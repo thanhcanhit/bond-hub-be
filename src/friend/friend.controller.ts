@@ -90,4 +90,13 @@ export class FriendController {
     const userId = req['user'].sub;
     return this.friendService.cancelFriendRequest(userId, requestId);
   }
+
+  @Get('relationship/:targetId')
+  async getRelationship(
+    @Request() req: Request,
+    @Param('targetId') targetId: string,
+  ) {
+    const userId = req['user'].sub;
+    return this.friendService.getRelationship(userId, targetId);
+  }
 }

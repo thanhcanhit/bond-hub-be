@@ -519,4 +519,127 @@ export class FriendService {
       where: { id: requestId },
     });
   }
+
+  // Lấy mối quan hệ giữa hai người dùng
+  async getRelationship(userId: string, targetId: string) {
+    // Kiểm tra người dùng có tồn tại không
+    const [user, target] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId } }),
+      this.prisma.user.findUnique({ where: { id: targetId } }),
+    ]);
+
+    if (!user || !target) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    // Kiểm tra xem người dùng có tự kiểm tra mối quan hệ với chính mình không
+    if (userId === targetId) {
+      return {
+        status: 'SELF',
+        message: 'Đây là chính bạn',
+        relationship: null,
+      };
+    }
+
+    // Tìm kiếm mối quan hệ giữa hai người dùng
+    const relationship = await this.prisma.friend.findFirst({
+      where: {
+        OR: [
+          {
+            senderId: userId,
+            receiverId: targetId,
+          },
+          {
+            senderId: targetId,
+            receiverId: userId,
+          },
+        ],
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            email: true,
+            phoneNumber: true,
+            userInfo: {
+              select: {
+                fullName: true,
+                profilePictureUrl: true,
+              },
+            },
+          },
+        },
+        receiver: {
+          select: {
+            id: true,
+            email: true,
+            phoneNumber: true,
+            userInfo: {
+              select: {
+                fullName: true,
+                profilePictureUrl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Nếu không có mối quan hệ
+    if (!relationship) {
+      return {
+        status: 'NONE',
+        message: 'Không có mối quan hệ',
+        relationship: null,
+        targetUser: target,
+      };
+    }
+
+    // Xác định loại mối quan hệ dựa trên trạng thái và vai trò
+    let status = '';
+    let message = '';
+
+    switch (relationship.status) {
+      case FriendStatus.ACCEPTED:
+        status = 'FRIEND';
+        message = 'Đã là bạn bè';
+        break;
+      case FriendStatus.PENDING:
+        if (relationship.senderId === userId) {
+          status = 'PENDING_SENT';
+          message = 'Đã gửi lời mời kết bạn';
+        } else {
+          status = 'PENDING_RECEIVED';
+          message = 'Đã nhận lời mời kết bạn';
+        }
+        break;
+      case FriendStatus.DECLINED:
+        if (relationship.senderId === userId) {
+          status = 'DECLINED_SENT';
+          message = 'Lời mời kết bạn đã bị từ chối';
+        } else {
+          status = 'DECLINED_RECEIVED';
+          message = 'Bạn đã từ chối lời mời kết bạn';
+        }
+        break;
+      case FriendStatus.BLOCKED:
+        if (relationship.senderId === userId) {
+          status = 'BLOCKED';
+          message = 'Bạn đã chặn người dùng này';
+        } else {
+          status = 'BLOCKED_BY';
+          message = 'Bạn đã bị người dùng này chặn';
+        }
+        break;
+    }
+    return {
+      status,
+      message,
+      relationship,
+      targetUser:
+        relationship.senderId === userId
+          ? relationship.receiver
+          : relationship.sender,
+    };
+  }
 }
