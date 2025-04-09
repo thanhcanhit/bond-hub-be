@@ -84,36 +84,36 @@ export class AuthService {
       })),
     });
 
-    // Check if there's already an active session for this device type
-    const existingDeviceTypeSession = activeTokens.find(
-      (token) => token.deviceType === deviceInfo.deviceType,
-    );
+    // // Check if there's already an active session for this device type
+    // const existingDeviceTypeSession = activeTokens.find(
+    //   (token) => token.deviceType === deviceInfo.deviceType,
+    // );
 
-    // Check if there's a mobile/tablet session that needs to be revoked
-    const mobileTabletSession = activeTokens.find(
-      (token) =>
-        (deviceInfo.deviceType === 'MOBILE' && token.deviceType === 'TABLET') ||
-        (deviceInfo.deviceType === 'TABLET' && token.deviceType === 'MOBILE'),
-    );
+    // // Check if there's a mobile/tablet session that needs to be revoked
+    // const mobileTabletSession = activeTokens.find(
+    //   (token) =>
+    //     (deviceInfo.deviceType === 'MOBILE' && token.deviceType === 'TABLET') ||
+    //     (deviceInfo.deviceType === 'TABLET' && token.deviceType === 'MOBILE'),
+    // );
 
     // If there's an existing session for this device type or a mobile/tablet session, revoke it
-    const sessionsToRevoke = [
-      existingDeviceTypeSession,
-      mobileTabletSession,
-    ].filter(Boolean); // Remove null/undefined values
+    // const sessionsToRevoke = [
+    //   existingDeviceTypeSession,
+    //   mobileTabletSession,
+    // ].filter(Boolean); // Remove null/undefined values
 
-    for (const sessionToRevoke of sessionsToRevoke) {
-      this.logger.log(
-        `Revoking existing session - UserId: ${user.id}, DeviceType: ${sessionToRevoke.deviceType}, DeviceId: ${sessionToRevoke.id}`,
-      );
+    // for (const sessionToRevoke of sessionsToRevoke) {
+    //   this.logger.log(
+    //     `Revoking existing session - UserId: ${user.id}, DeviceType: ${sessionToRevoke.deviceType}, DeviceId: ${sessionToRevoke.id}`,
+    //   );
 
-      await this.prisma.refreshToken.update({
-        where: { id: sessionToRevoke.id },
-        data: { isRevoked: true },
-      });
-      // Notify the existing device about logout
-      await this.authGateway.notifyDeviceLogout(user.id, sessionToRevoke.id);
-    }
+    //   await this.prisma.refreshToken.update({
+    //     where: { id: sessionToRevoke.id },
+    //     data: { isRevoked: true },
+    //   });
+    //   // Notify the existing device about logout
+    //   await this.authGateway.notifyDeviceLogout(user.id, sessionToRevoke.id);
+    // }
 
     // Generate tokens
     const tokens = await this.generateTokens(user.id, deviceInfo);
