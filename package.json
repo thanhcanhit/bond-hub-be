@@ -20,7 +20,10 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prepare": "husky install",
-    "seed": "prisma db seed"
+    "seed": "prisma db seed",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "prisma db seed",
+    "db:setup": "npm run db:migrate && npm run db:seed"
   },
   "dependencies": {
     "@aws-sdk/client-sns": "^3.535.0",
