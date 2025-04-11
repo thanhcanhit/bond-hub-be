@@ -2,11 +2,10 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { QrCodeGateway } from './qr-code.gateway';
-import { QrCodeStatus, FriendStatus } from '@prisma/client';
+import { QrCodeStatus } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -213,11 +212,8 @@ export class QrCodeService {
         throw new NotFoundException('QR Code not found');
       }
 
-      // Kiểm tra thời hạn QR code, trừ QR code kết bạn
-      if (
-        new Date() > qrCode.expiresAt &&
-        qrCode.status !== QrCodeStatus.FRIEND_REQUEST
-      ) {
+      // Kiểm tra thời hạn QR code
+      if (new Date() > qrCode.expiresAt) {
         throw new BadRequestException('QR Code has expired');
       }
 
@@ -252,6 +248,9 @@ export class QrCodeService {
         console.warn(`QR code with token ${qrToken} not found for deletion`);
         return;
       }
+
+      // Close any active WebSocket connections for this QR code
+      this.qrCodeGateway.closeQrConnections(qrToken);
 
       // Then delete it by ID which is the primary key
       const deletedQrCode = await this.prisma.qrCode.delete({

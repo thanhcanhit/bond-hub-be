@@ -163,33 +163,33 @@ async function createFriendships(users: any[]) {
   // Các tình huống bạn bè khác nhau
   const friendships = [
     {
-      userOneId: users[0].id,
-      userTwoId: users[1].id,
+      senderId: users[0].id,
+      receiverId: users[1].id,
       status: FriendStatus.ACCEPTED,
     },
     {
-      userOneId: users[0].id,
-      userTwoId: users[2].id,
+      senderId: users[0].id,
+      receiverId: users[2].id,
       status: FriendStatus.PENDING,
     },
     {
-      userOneId: users[1].id,
-      userTwoId: users[3].id,
+      senderId: users[1].id,
+      receiverId: users[3].id,
       status: FriendStatus.ACCEPTED,
     },
     {
-      userOneId: users[2].id,
-      userTwoId: users[4].id,
+      senderId: users[2].id,
+      receiverId: users[4].id,
       status: FriendStatus.ACCEPTED,
     },
     {
-      userOneId: users[3].id,
-      userTwoId: users[0].id,
+      senderId: users[3].id,
+      receiverId: users[0].id,
       status: FriendStatus.PENDING,
     },
     {
-      userOneId: users[4].id,
-      userTwoId: users[1].id,
+      senderId: users[4].id,
+      receiverId: users[1].id,
       status: FriendStatus.BLOCKED,
     },
   ];
@@ -628,7 +628,7 @@ async function createNotifications(users: any[]) {
         type: 'FRIEND',
         id: (
           await prisma.friend.findFirst({
-            where: { userOneId: users[3].id, userTwoId: users[0].id },
+            where: { senderId: users[3].id, receiverId: users[0].id },
           })
         )?.id,
       },
