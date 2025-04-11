@@ -15,6 +15,7 @@ import { MessageService } from './message.service';
 import { UserMessageDto } from './dtos/user-message.dto';
 import { GroupMessageDto } from './dtos/group-message.dto';
 import { CreateReactionDto } from './dtos/create-reaction.dto';
+
 import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
 
 @WebSocketGateway({
@@ -407,6 +408,57 @@ export class MessageGateway
         ...typingEvent,
         groupId: data.groupId,
       });
+    }
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('messageWithMediaSent')
+  async handleMessageWithMedia(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { messageId: string },
+  ) {
+    const userId = await this.getUserFromSocket(client);
+    if (!userId) return;
+
+    try {
+      // Get the message details
+      const message = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+      });
+
+      if (!message) {
+        client.emit('error', { message: 'Message not found' });
+        return;
+      }
+
+      // Emit to appropriate rooms based on message type
+      if (message.messageType === 'USER') {
+        // For direct messages, emit to both sender and receiver
+        this.server.to(`user:${message.senderId}`).emit('newMessage', {
+          type: 'user',
+          message,
+          timestamp: new Date(),
+        });
+
+        if (message.receiverId) {
+          this.server.to(`user:${message.receiverId}`).emit('newMessage', {
+            type: 'user',
+            message,
+            timestamp: new Date(),
+          });
+        }
+      } else if (message.messageType === 'GROUP' && message.groupId) {
+        // For group messages, emit to the group
+        this.server.to(`group:${message.groupId}`).emit('newMessage', {
+          type: 'group',
+          message,
+          timestamp: new Date(),
+        });
+      }
+
+      return message;
+    } catch (error) {
+      client.emit('error', { message: error.message });
     }
   }
 }

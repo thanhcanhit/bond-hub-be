@@ -10,15 +10,23 @@ import {
   Post,
   Query,
   Request,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { MessageService } from './message.service';
+import { MessageGateway } from './message.gateway';
 import { UserMessageDto } from './dtos/user-message.dto';
 import { GroupMessageDto } from './dtos/group-message.dto';
 import { CreateReactionDto } from './dtos/create-reaction.dto';
+import { MessageMediaUploadDto } from './dtos/message-media.dto';
 
 @Controller('messages')
 export class MessageController {
-  constructor(private readonly messageService: MessageService) {}
+  constructor(
+    private readonly messageService: MessageService,
+    private readonly messageGateway: MessageGateway,
+  ) {}
 
   @Get('/group/:groupId')
   async getGroupMessages(
@@ -73,21 +81,71 @@ export class MessageController {
   }
 
   @Post('/user')
+  @UseInterceptors(FilesInterceptor('files', 10)) // Allow up to 10 files
   async createUserMessage(
     @Body() messageBody: UserMessageDto,
+    @UploadedFiles() files: Express.Multer.File[] = [],
     @Request() req: Request,
   ) {
     const requestUserId = req['user'].sub;
-    return this.messageService.createUserMessage(messageBody, requestUserId);
+    const createdMessage = await this.messageService.createUserMessageWithMedia(
+      messageBody,
+      files,
+      requestUserId,
+    );
+
+    // If message contains media, notify via WebSocket
+    if (files && files.length > 0) {
+      // Emit to sender's room
+      this.messageGateway.server
+        .to(`user:${requestUserId}`)
+        .emit('newMessage', {
+          type: 'user',
+          message: createdMessage,
+          timestamp: new Date(),
+        });
+
+      // Emit to receiver's room
+      this.messageGateway.server
+        .to(`user:${messageBody.receiverId}`)
+        .emit('newMessage', {
+          type: 'user',
+          message: createdMessage,
+          timestamp: new Date(),
+        });
+    }
+
+    return createdMessage;
   }
 
   @Post('/group')
+  @UseInterceptors(FilesInterceptor('files', 10)) // Allow up to 10 files
   async createGroupMessage(
     @Body() messageBody: GroupMessageDto,
+    @UploadedFiles() files: Express.Multer.File[] = [],
     @Request() req: Request,
   ) {
     const requestUserId = req['user'].sub;
-    return this.messageService.createGroupMessage(messageBody, requestUserId);
+    const createdMessage =
+      await this.messageService.createGroupMessageWithMedia(
+        messageBody,
+        files,
+        requestUserId,
+      );
+
+    // If message contains media, notify via WebSocket
+    if (files && files.length > 0) {
+      // Emit to the group room
+      this.messageGateway.server
+        .to(`group:${messageBody.groupId}`)
+        .emit('newMessage', {
+          type: 'group',
+          message: createdMessage,
+          timestamp: new Date(),
+        });
+    }
+
+    return createdMessage;
   }
 
   @Patch('/recall/:messageId')
@@ -142,5 +200,25 @@ export class MessageController {
   ) {
     const requestUserId = req['user'].sub;
     return this.messageService.removeReaction(messageId, requestUserId);
+  }
+
+  @Post('/media')
+  @UseInterceptors(FilesInterceptor('files', 10)) // Allow up to 10 files
+  async uploadMessageMedia(
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body() messageData: MessageMediaUploadDto,
+    @Request() req: Request,
+  ) {
+    const requestUserId = req['user'].sub;
+    const result = await this.messageService.uploadMessageMedia(
+      files,
+      messageData,
+      requestUserId,
+    );
+
+    // Media upload is handled by the message service
+    // No need to notify via WebSocket as clients will receive updates through regular message events
+
+    return result;
   }
 }
