@@ -1,15 +1,46 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UserMessageDto } from './dtos/user-message.dto';
 import { GroupMessageDto } from './dtos/group-message.dto';
 import { CreateReactionDto } from './dtos/create-reaction.dto';
 import { MessageReaction } from './dtos/message-reaction.dto';
+import { MediaType } from './dtos/base-message.dto';
+import {
+  MediaItem,
+  MessageContent,
+  PrismaMessage,
+} from './interfaces/message.interface';
+import { InputJsonValue } from './interfaces/prisma-json.interface';
+import {
+  MessageMediaProcessingResult,
+  MessageMediaUploadDto,
+} from './dtos/message-media.dto';
+import { StorageService } from 'src/storage/storage.service';
+import { v4 as uuidv4 } from 'uuid';
 
 const PAGE_SIZE = 30;
 
+/**
+ * Helper function to convert any object to Prisma-compatible JSON
+ * This is needed because Prisma requires JSON to be in a specific format
+ */
+function toPrismaJson<T>(data: T): InputJsonValue {
+  return JSON.parse(JSON.stringify(data)) as InputJsonValue;
+}
+
 @Injectable()
 export class MessageService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly MESSAGE_MEDIA_BUCKET = 'messages';
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storageService: StorageService,
+  ) {}
 
   async createUserMessage(message: UserMessageDto, userId: string) {
     // Validation: ensure the sender is the authenticated user
@@ -22,14 +53,24 @@ export class MessageService {
       throw new ForbiddenException('You cannot send messages to yourself');
     }
 
+    // Convert media items to JSON-compatible format
+    const mediaItems =
+      message.content.media?.map((item) => ({
+        url: item.url,
+        type: item.type,
+        thumbnailUrl: item.thumbnailUrl,
+        metadata: item.metadata || {},
+      })) || [];
+
     return this.prisma.message.create({
       data: {
-        ...message,
-        senderId: userId, // Ensure the sender is the authenticated user
-        content: {
-          text: message.content.text,
-          media: message.content.media || [],
-        },
+        senderId: userId,
+        receiverId: message.receiverId,
+        repliedTo: message.repliedTo,
+        content: toPrismaJson({
+          text: message.content.text || '',
+          media: mediaItems,
+        }),
         messageType: 'USER',
       },
     });
@@ -53,14 +94,24 @@ export class MessageService {
       throw new ForbiddenException('You are not a member of this group');
     }
 
+    // Convert media items to JSON-compatible format
+    const mediaItems =
+      message.content.media?.map((item) => ({
+        url: item.url,
+        type: item.type,
+        thumbnailUrl: item.thumbnailUrl,
+        metadata: item.metadata || {},
+      })) || [];
+
     return this.prisma.message.create({
       data: {
-        ...message,
-        senderId: userId, // Ensure the sender is the authenticated user
-        content: {
-          text: message.content.text,
-          media: message.content.media || [],
-        },
+        senderId: userId,
+        groupId: message.groupId,
+        repliedTo: message.repliedTo,
+        content: toPrismaJson({
+          text: message.content.text || '',
+          media: mediaItems,
+        }),
         messageType: 'GROUP',
       },
     });
@@ -528,5 +579,201 @@ export class MessageService {
         createdAt: 'desc',
       },
     });
+  }
+
+  /**
+   * Upload media files for a message
+   * @param files Array of files to upload
+   * @param messageData Message data including sender, receiver/group info
+   * @param userId User ID of the uploader
+   * @returns Information about the uploaded media and message
+   */
+  async uploadMessageMedia(
+    files: Express.Multer.File[],
+    messageData: MessageMediaUploadDto,
+    userId: string,
+  ): Promise<MessageMediaProcessingResult> {
+    try {
+      // Validate user permissions
+      if (messageData.senderId && messageData.senderId !== userId) {
+        throw new ForbiddenException(
+          'You can only upload media for your own messages',
+        );
+      }
+
+      // For group messages, check if user is a member
+      if (messageData.groupId) {
+        const isMember = await this.prisma.groupMember.findFirst({
+          where: {
+            groupId: messageData.groupId,
+            userId,
+          },
+        });
+
+        if (!isMember) {
+          throw new ForbiddenException('You are not a member of this group');
+        }
+      }
+
+      // For direct messages, prevent self-messaging
+      if (messageData.receiverId === userId) {
+        throw new ForbiddenException('You cannot send messages to yourself');
+      }
+
+      // Create folder path based on conversation type and IDs
+      // Format: /{conversation_type}/{conversation_id}/{year}/{month}/{day}
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const dateFolder = `${year}/${month}/${day}`;
+
+      let folderPath = '';
+      if (messageData.groupId) {
+        folderPath = `groups/${messageData.groupId}/${dateFolder}`;
+      } else if (messageData.receiverId) {
+        // For direct messages, create a consistent folder name regardless of who is sender/receiver
+        const participants = [userId, messageData.receiverId].sort().join('-');
+        folderPath = `direct/${participants}/${dateFolder}`;
+      } else {
+        throw new BadRequestException(
+          'Either groupId or receiverId must be provided',
+        );
+      }
+
+      // Upload files to storage service
+      const uploadResults = await this.storageService.uploadFiles(
+        files,
+        this.MESSAGE_MEDIA_BUCKET,
+        folderPath,
+      );
+
+      // Process uploaded files based on media type
+      const mediaItems: MediaItem[] = uploadResults.map((file) => {
+        // Determine media type from file if not specified
+        const mediaType =
+          messageData.mediaType || this.getMediaTypeFromMimeType(file.mimeType);
+
+        // Create structured media item with proper typing
+        const mediaItem: MediaItem = {
+          url: file.url,
+          type: mediaType,
+          fileId: file.id,
+          fileName: file.originalName,
+          thumbnailUrl:
+            mediaType === MediaType.IMAGE || mediaType === MediaType.VIDEO
+              ? file.url
+              : undefined,
+          metadata: {
+            size: file.size,
+            sizeFormatted: file.sizeFormatted,
+            mimeType: file.mimeType,
+            width: file.metadata?.width,
+            height: file.metadata?.height,
+            extension: file.extension,
+            uploadedAt: new Date().toISOString(),
+            path: file.path,
+            bucketName: this.MESSAGE_MEDIA_BUCKET,
+          },
+        };
+
+        return mediaItem;
+      });
+
+      // Create or update the message with the media
+      // Use Prisma's return type
+      let message: PrismaMessage;
+      if (messageData.messageId) {
+        // Update existing message
+        const existingMessage = await this.prisma.message.findUnique({
+          where: { id: messageData.messageId },
+          select: { content: true },
+        });
+
+        if (!existingMessage) {
+          throw new NotFoundException('Message not found');
+        }
+
+        // Get existing content
+        const content = existingMessage.content as MessageContent;
+        const existingMedia = content.media || [];
+
+        // Update message with new media
+        message = await this.prisma.message.update({
+          where: { id: messageData.messageId },
+          data: {
+            content: toPrismaJson({
+              text: messageData.text || content.text || '',
+              media: [...existingMedia, ...mediaItems],
+            }),
+          },
+        });
+      } else {
+        // Create new message with media
+        const messageContent = toPrismaJson({
+          text: messageData.text || '',
+          media: mediaItems,
+        });
+
+        if (messageData.groupId) {
+          // Create group message
+          message = await this.prisma.message.create({
+            data: {
+              senderId: userId,
+              groupId: messageData.groupId,
+              content: messageContent,
+              messageType: 'GROUP',
+            },
+          });
+        } else if (messageData.receiverId) {
+          // Create direct message
+          message = await this.prisma.message.create({
+            data: {
+              senderId: userId,
+              receiverId: messageData.receiverId,
+              content: messageContent,
+              messageType: 'USER',
+            },
+          });
+        }
+      }
+
+      return {
+        messageId: message.id,
+        mediaItems,
+        success: true,
+      };
+    } catch (error) {
+      return {
+        messageId: messageData.messageId || uuidv4(),
+        mediaItems: [],
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Get media type from file mimetype
+   * @param mimeType The MIME type of the file
+   * @returns The corresponding MediaType enum value
+   */
+  getMediaTypeFromMimeType(mimeType: string): MediaType {
+    if (mimeType.startsWith('image/')) {
+      return MediaType.IMAGE;
+    } else if (mimeType.startsWith('video/')) {
+      return MediaType.VIDEO;
+    } else if (mimeType.startsWith('audio/')) {
+      return MediaType.AUDIO;
+    } else if (
+      mimeType.includes('pdf') ||
+      mimeType.includes('document') ||
+      mimeType.includes('sheet') ||
+      mimeType.includes('presentation')
+    ) {
+      return MediaType.DOCUMENT;
+    } else {
+      return MediaType.OTHER;
+    }
   }
 }

@@ -10,11 +10,15 @@ import {
   Post,
   Query,
   Request,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { MessageService } from './message.service';
 import { UserMessageDto } from './dtos/user-message.dto';
 import { GroupMessageDto } from './dtos/group-message.dto';
 import { CreateReactionDto } from './dtos/create-reaction.dto';
+import { MessageMediaUploadDto } from './dtos/message-media.dto';
 
 @Controller('messages')
 export class MessageController {
@@ -142,5 +146,25 @@ export class MessageController {
   ) {
     const requestUserId = req['user'].sub;
     return this.messageService.removeReaction(messageId, requestUserId);
+  }
+
+  @Post('/media')
+  @UseInterceptors(FilesInterceptor('files', 10)) // Allow up to 10 files
+  async uploadMessageMedia(
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body() messageData: MessageMediaUploadDto,
+    @Request() req: Request,
+  ) {
+    const requestUserId = req['user'].sub;
+    const result = await this.messageService.uploadMessageMedia(
+      files,
+      messageData,
+      requestUserId,
+    );
+
+    // Media upload is handled by the message service
+    // No need to notify via WebSocket as clients will receive updates through regular message events
+
+    return result;
   }
 }

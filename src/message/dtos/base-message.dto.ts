@@ -1,5 +1,7 @@
 import {
   IsArray,
+  IsEnum,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -7,14 +9,40 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-class MessageContentDto {
+export enum MediaType {
+  IMAGE = 'IMAGE',
+  VIDEO = 'VIDEO',
+  AUDIO = 'AUDIO',
+  DOCUMENT = 'DOCUMENT',
+  OTHER = 'OTHER',
+}
+
+export class MediaItemDto {
   @IsString()
-  text: string;
+  url: string;
+
+  @IsEnum(MediaType)
+  type: MediaType;
+
+  @IsOptional()
+  @IsString()
+  thumbnailUrl?: string;
+
+  @IsOptional()
+  @IsObject()
+  metadata?: Record<string, unknown>;
+}
+
+export class MessageContentDto {
+  @IsOptional()
+  @IsString()
+  text?: string;
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  media: string[] = [];
+  @ValidateNested({ each: true })
+  @Type(() => MediaItemDto)
+  media?: MediaItemDto[] = [];
 }
 
 export class BaseCreateMessageDto {
