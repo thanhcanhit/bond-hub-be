@@ -2,20 +2,30 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { FriendStatus, Prisma } from '@prisma/client';
+import { FriendStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { SendFriendRequestDto } from './dto/send-friend-request.dto';
 import { RespondFriendRequestDto } from './dto/respond-friend-request.dto';
 
 @Injectable()
 export class FriendService {
+  private readonly logger = new Logger('FriendService');
+
   constructor(private prisma: PrismaService) {}
 
   // Gửi lời mời kết bạn
   async sendFriendRequest(senderId: string, dto: SendFriendRequestDto) {
-    const { receiverId, introducedBy } = dto;
+    const { receiverId, introduce } = dto;
+
+    // Validate UUID format
+    if (!this.isValidUUID(senderId) || !this.isValidUUID(receiverId)) {
+      // log id
+      this.logger.log(`Sender ID: ${senderId}, Receiver ID: ${receiverId}`);
+      throw new BadRequestException('Invalid user ID format');
+    }
 
     // Kiểm tra người gửi và người nhận có tồn tại không
     const [sender, receiver] = await Promise.all([
@@ -90,7 +100,7 @@ export class FriendService {
           data: {
             status: FriendStatus.PENDING,
             updatedAt: new Date(),
-            introducedBy: introducedBy || null,
+            introduce: introduce || null,
           },
         });
       }
@@ -148,7 +158,7 @@ export class FriendService {
         senderId,
         receiverId,
         status: FriendStatus.PENDING,
-        introducedBy: introducedBy || null,
+        introduce: introduce || null,
       },
       include: {
         sender: {
@@ -184,6 +194,11 @@ export class FriendService {
   // Phản hồi lời mời kết bạn (chấp nhận, từ chối, block)
   async respondToFriendRequest(userId: string, dto: RespondFriendRequestDto) {
     const { requestId, status } = dto;
+
+    // Validate UUID format
+    if (!this.isValidUUID(userId) || !this.isValidUUID(requestId)) {
+      throw new BadRequestException('Invalid ID format');
+    }
 
     // Kiểm tra lời mời kết bạn có tồn tại không
     const friendRequest = await this.prisma.friend.findUnique({
@@ -246,6 +261,12 @@ export class FriendService {
 
   // Block người dùng
   async blockUser(userId: string, targetId: string) {
+    // Validate UUID format to prevent errors
+    if (!this.isValidUUID(userId) || !this.isValidUUID(targetId)) {
+      this.logger.log(`Sender ID: ${userId}, Target ID: ${targetId}`);
+      throw new BadRequestException('Invalid user ID format');
+    }
+
     // Kiểm tra người dùng có tồn tại không
     const [user, target] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: userId } }),
@@ -307,6 +328,10 @@ export class FriendService {
 
   // Lấy danh sách lời mời kết bạn đã nhận
   async getReceivedFriendRequests(userId: string) {
+    // Validate UUID format
+    if (!this.isValidUUID(userId)) {
+      throw new BadRequestException('Invalid user ID format');
+    }
     return this.prisma.friend.findMany({
       where: {
         receiverId: userId,
@@ -335,6 +360,10 @@ export class FriendService {
 
   // Lấy danh sách lời mời kết bạn đã gửi
   async getSentFriendRequests(userId: string) {
+    // Validate UUID format
+    if (!this.isValidUUID(userId)) {
+      throw new BadRequestException('Invalid user ID format');
+    }
     return this.prisma.friend.findMany({
       where: {
         senderId: userId,
@@ -363,6 +392,10 @@ export class FriendService {
 
   // Lấy danh sách bạn bè
   async getFriendList(userId: string) {
+    // Validate UUID format
+    if (!this.isValidUUID(userId)) {
+      throw new BadRequestException('Invalid user ID format');
+    }
     const friends = await this.prisma.friend.findMany({
       where: {
         OR: [
@@ -428,6 +461,10 @@ export class FriendService {
 
   // Lấy danh sách người dùng đã block
   async getBlockedUsers(userId: string) {
+    // Validate UUID format
+    if (!this.isValidUUID(userId)) {
+      throw new BadRequestException('Invalid user ID format');
+    }
     return this.prisma.friend.findMany({
       where: {
         senderId: userId,
@@ -454,8 +491,20 @@ export class FriendService {
     });
   }
 
+  // Helper method to validate UUID format
+  private isValidUUID(id: string): boolean {
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(id);
+  }
+
   // Hủy block người dùng
   async unblockUser(userId: string, targetId: string) {
+    // Validate UUID format
+    if (!this.isValidUUID(userId) || !this.isValidUUID(targetId)) {
+      throw new BadRequestException('Invalid user ID format');
+    }
+
     const blockedRelation = await this.prisma.friend.findFirst({
       where: {
         senderId: userId,
@@ -475,6 +524,11 @@ export class FriendService {
 
   // Hủy kết bạn
   async unfriend(userId: string, friendId: string) {
+    // Validate UUID format
+    if (!this.isValidUUID(userId) || !this.isValidUUID(friendId)) {
+      throw new BadRequestException('Invalid user ID format');
+    }
+
     const friendship = await this.prisma.friend.findFirst({
       where: {
         OR: [
@@ -503,6 +557,11 @@ export class FriendService {
 
   // Hủy lời mời kết bạn đã gửi
   async cancelFriendRequest(userId: string, requestId: string) {
+    // Validate UUID format
+    if (!this.isValidUUID(userId) || !this.isValidUUID(requestId)) {
+      throw new BadRequestException('Invalid ID format');
+    }
+
     const friendRequest = await this.prisma.friend.findFirst({
       where: {
         id: requestId,
@@ -522,6 +581,11 @@ export class FriendService {
 
   // Lấy mối quan hệ giữa hai người dùng
   async getRelationship(userId: string, targetId: string) {
+    // Validate UUID format
+    if (!this.isValidUUID(userId) || !this.isValidUUID(targetId)) {
+      throw new BadRequestException('Invalid user ID format');
+    }
+
     // Kiểm tra người dùng có tồn tại không
     const [user, target] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: userId } }),
@@ -587,11 +651,27 @@ export class FriendService {
 
     // Nếu không có mối quan hệ
     if (!relationship) {
+      // Get user info for the target user
+      const targetUserInfo = await this.prisma.userInfo.findUnique({
+        where: { id: targetId },
+      });
+
       return {
         status: 'NONE',
         message: 'Không có mối quan hệ',
         relationship: null,
-        targetUser: target,
+        targetUser: {
+          id: targetId,
+          email: target.email,
+          phoneNumber: target.phoneNumber,
+          userInfo: {
+            fullName: targetUserInfo?.fullName,
+            profilePictureUrl: targetUserInfo?.profilePictureUrl,
+            coverImgUrl: targetUserInfo?.coverImgUrl,
+            bio: targetUserInfo?.bio,
+            statusMessage: targetUserInfo?.statusMessage,
+          },
+        },
       };
     }
 

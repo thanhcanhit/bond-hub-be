@@ -65,7 +65,7 @@ model Friend {
   receiver     User         @relation(name: "ReceiverUser", fields: [receiverId], references: [id])
   receiverId   String       @map("receiver_id") @db.Uuid
   status       FriendStatus @default(PENDING)
-  introducedBy String?      @map("introduced_by") @db.Uuid
+  introduce String?      @map("introduced_by")
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
   @@map("friends")

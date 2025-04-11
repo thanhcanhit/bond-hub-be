@@ -7,5 +7,5 @@ export class SendFriendRequestDto {
 
   @IsOptional()
   @IsString()
-  introducedBy?: string;
+  introduce?: string;
 }

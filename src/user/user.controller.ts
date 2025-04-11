@@ -5,6 +5,7 @@ import {
   NotFoundException,
   Post,
   Body,
+  Request,
 } from '@nestjs/common';
 
 import { UserService } from './user.service';
@@ -38,11 +39,16 @@ export class UserController {
   }
 
   @Post('search')
-  async searchUser(@Body() searchUserDto: SearchUserDto) {
+  async searchUser(
+    @Body() searchUserDto: SearchUserDto,
+    @Request() req: Request,
+  ) {
     try {
+      const currentUserId = req['user'].sub;
       return await this.userService.searchUserByEmailOrPhone(
         searchUserDto.email,
         searchUserDto.phoneNumber,
+        currentUserId,
       );
     } catch (error) {
       if (error instanceof NotFoundException) {
