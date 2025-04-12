@@ -23,6 +23,10 @@ import {
 import { StorageService } from 'src/storage/storage.service';
 import { v4 as uuidv4 } from 'uuid';
 import { ForwardMessageDto } from './dtos/forward-message.dto';
+import {
+  ConversationItemDto,
+  ConversationListResponseDto,
+} from './dtos/conversation-list.dto';
 
 const PAGE_SIZE = 30;
 
@@ -982,6 +986,277 @@ export class MessageService {
     }
   }
 
+  /**
+   * Get conversation list for a user
+   * @param userId User ID
+   * @param page Page number (optional, default: 1)
+   * @param limit Number of conversations per page (optional, default: 20)
+   * @returns List of conversations with last messages
+   */
+  async getConversationList(
+    userId: string,
+    page = 1,
+    limit = 20,
+  ): Promise<ConversationListResponseDto> {
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+
+    // Get direct conversations (1-on-1 messages)
+    const directConversations = await this.prisma.$queryRaw<any[]>`
+      WITH direct_conversations AS (
+        SELECT
+          CASE
+            WHEN m.sender_id = ${userId}::uuid THEN m.receiver_id
+            ELSE m.sender_id
+          END as conversation_user_id,
+          MAX(m.created_at) as last_message_time
+        FROM messages m
+        WHERE
+          (m.sender_id = ${userId}::uuid OR m.receiver_id = ${userId}::uuid)
+          AND m.message_type = 'USER'
+          AND NOT ${userId}::uuid = ANY(m.deleted_by)
+        GROUP BY conversation_user_id
+      ),
+      last_messages AS (
+        SELECT DISTINCT ON (conversation_id)
+          id,
+          CASE
+            WHEN m.sender_id = ${userId}::uuid THEN m.receiver_id
+            ELSE m.sender_id
+          END as conversation_id,
+          m.content,
+          m.sender_id,
+          m.created_at,
+          m.is_recalled,
+          m.read_by
+        FROM messages m
+        JOIN direct_conversations dc ON
+          (dc.conversation_user_id = m.receiver_id AND m.sender_id = ${userId}::uuid) OR
+          (dc.conversation_user_id = m.sender_id AND m.receiver_id = ${userId}::uuid)
+        WHERE NOT ${userId}::uuid = ANY(m.deleted_by)
+        ORDER BY conversation_id, m.created_at DESC
+      ),
+      unread_counts AS (
+        SELECT
+          CASE
+            WHEN m.sender_id = ${userId}::uuid THEN m.receiver_id
+            ELSE m.sender_id
+          END as conversation_id,
+          COUNT(*) as unread_count
+        FROM messages m
+        WHERE
+          m.receiver_id = ${userId}::uuid AND
+          NOT ${userId}::uuid = ANY(m.read_by) AND
+          NOT ${userId}::uuid = ANY(m.deleted_by)
+        GROUP BY conversation_id
+      )
+      SELECT
+        u.user_id as id,
+        'USER' as type,
+        ui.full_name as "fullName",
+        ui.profile_picture_url as "profilePictureUrl",
+        ui.status_message as "statusMessage",
+        ui.last_seen as "lastSeen",
+        lm.id as "lastMessageId",
+        lm.content as "lastMessageContent",
+        lm.sender_id as "lastMessageSenderId",
+        lm.created_at as "lastMessageCreatedAt",
+        lm.is_recalled as "lastMessageRecalled",
+        CASE WHEN ${userId}::uuid = ANY(lm.read_by) THEN true ELSE false END as "isLastMessageRead",
+        COALESCE(uc.unread_count, 0) as "unreadCount",
+        lm.created_at as "updatedAt"
+      FROM direct_conversations dc
+      JOIN users u ON u.user_id = dc.conversation_user_id
+      LEFT JOIN user_infors ui ON ui.info_id = u.info_id
+      LEFT JOIN last_messages lm ON lm.conversation_id = dc.conversation_user_id
+      LEFT JOIN unread_counts uc ON uc.conversation_id = dc.conversation_user_id
+      ORDER BY lm.created_at DESC
+      LIMIT ${limit} OFFSET ${skip}
+    `;
+
+    // Get group conversations
+    const groupConversations = await this.prisma.$queryRaw<any[]>`
+      WITH user_groups AS (
+        SELECT gm.group_id
+        FROM group_members gm
+        WHERE gm.user_id = ${userId}::uuid
+      ),
+      last_group_messages AS (
+        SELECT DISTINCT ON (m.group_id)
+          m.id,
+          m.group_id,
+          m.content,
+          m.sender_id,
+          m.created_at,
+          m.is_recalled,
+          m.read_by
+        FROM messages m
+        JOIN user_groups ug ON m.group_id = ug.group_id
+        WHERE NOT ${userId}::uuid = ANY(m.deleted_by)
+        ORDER BY m.group_id, m.created_at DESC
+      ),
+      unread_group_counts AS (
+        SELECT
+          m.group_id,
+          COUNT(*) as unread_count
+        FROM messages m
+        JOIN user_groups ug ON m.group_id = ug.group_id
+        WHERE
+          NOT ${userId}::uuid = ANY(m.read_by) AND
+          NOT ${userId}::uuid = ANY(m.deleted_by)
+        GROUP BY m.group_id
+      )
+      SELECT
+        g.group_id as id,
+        'GROUP' as type,
+        g.group_name as name,
+        g.avatar_url as "avatarUrl",
+        lgm.id as "lastMessageId",
+        lgm.content as "lastMessageContent",
+        lgm.sender_id as "lastMessageSenderId",
+        lgm.created_at as "lastMessageCreatedAt",
+        lgm.is_recalled as "lastMessageRecalled",
+        CASE WHEN ${userId}::uuid = ANY(lgm.read_by) THEN true ELSE false END as "isLastMessageRead",
+        COALESCE(ugc.unread_count, 0) as "unreadCount",
+        lgm.created_at as "updatedAt"
+      FROM groups g
+      JOIN user_groups ug ON g.group_id = ug.group_id
+      LEFT JOIN last_group_messages lgm ON lgm.group_id = g.group_id
+      LEFT JOIN unread_group_counts ugc ON ugc.group_id = g.group_id
+      ORDER BY lgm.created_at DESC
+      LIMIT ${limit} OFFSET ${skip}
+    `;
+
+    // Get sender names for last messages
+    const senderIds = [
+      ...directConversations.map((c) => c.lastMessageSenderId),
+      ...groupConversations.map((c) => c.lastMessageSenderId),
+    ].filter((id) => id); // Filter out null/undefined
+
+    const uniqueSenderIds = [...new Set(senderIds)];
+
+    const senders =
+      uniqueSenderIds.length > 0
+        ? await this.prisma.user.findMany({
+            where: { id: { in: uniqueSenderIds } },
+            select: {
+              id: true,
+              userInfo: {
+                select: {
+                  fullName: true,
+                },
+              },
+            },
+          })
+        : [];
+
+    // Create a map of sender IDs to names
+    const senderMap = new Map();
+    senders.forEach((sender) => {
+      senderMap.set(sender.id, sender.userInfo?.fullName || 'Unknown User');
+    });
+
+    // Transform direct conversations to DTO format
+    const directConversationItems = directConversations.map((conv) => {
+      const lastMessage = conv.lastMessageId
+        ? {
+            id: conv.lastMessageId,
+            content: conv.lastMessageContent,
+            senderId: conv.lastMessageSenderId,
+            senderName:
+              senderMap.get(conv.lastMessageSenderId) || 'Unknown User',
+            createdAt: conv.lastMessageCreatedAt,
+            recalled: conv.lastMessageRecalled,
+            isRead: conv.isLastMessageRead,
+          }
+        : undefined;
+
+      return {
+        id: conv.id,
+        type: 'USER',
+        user: {
+          id: conv.id,
+          fullName: conv.fullName,
+          profilePictureUrl: conv.profilePictureUrl,
+          statusMessage: conv.statusMessage,
+          lastSeen: conv.lastSeen,
+        },
+        lastMessage,
+        unreadCount: parseInt(conv.unreadCount) || 0,
+        updatedAt: conv.updatedAt,
+      };
+    });
+
+    // Transform group conversations to DTO format
+    const groupConversationItems = groupConversations.map((conv) => {
+      const lastMessage = conv.lastMessageId
+        ? {
+            id: conv.lastMessageId,
+            content: conv.lastMessageContent,
+            senderId: conv.lastMessageSenderId,
+            senderName:
+              senderMap.get(conv.lastMessageSenderId) || 'Unknown User',
+            createdAt: conv.lastMessageCreatedAt,
+            recalled: conv.lastMessageRecalled,
+            isRead: conv.isLastMessageRead,
+          }
+        : undefined;
+
+      return {
+        id: conv.id,
+        type: 'GROUP',
+        group: {
+          id: conv.id,
+          name: conv.name,
+          avatarUrl: conv.avatarUrl,
+        },
+        lastMessage,
+        unreadCount: parseInt(conv.unreadCount) || 0,
+        updatedAt: conv.updatedAt,
+      };
+    });
+
+    // Combine and sort all conversations by last message time (descending)
+    const allConversations = [
+      ...directConversationItems,
+      ...groupConversationItems,
+    ].sort((a, b) => {
+      const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    // Get total count of conversations
+    const totalDirectCount = await this.prisma.$queryRaw<[{ count: string }]>`
+      SELECT COUNT(DISTINCT
+        CASE
+          WHEN m.sender_id = ${userId}::uuid THEN m.receiver_id
+          ELSE m.sender_id
+        END
+      ) as count
+      FROM messages m
+      WHERE
+        (m.sender_id = ${userId}::uuid OR m.receiver_id = ${userId}::uuid)
+        AND m.message_type = 'USER'
+        AND NOT ${userId}::uuid = ANY(m.deleted_by)
+    `;
+
+    const totalGroupCount = await this.prisma.$queryRaw<[{ count: string }]>`
+      SELECT COUNT(DISTINCT gm.group_id) as count
+      FROM group_members gm
+      WHERE gm.user_id = ${userId}::uuid
+    `;
+
+    const totalCount =
+      parseInt(totalDirectCount[0]?.count || '0') +
+      parseInt(totalGroupCount[0]?.count || '0');
+
+    return {
+      conversations: allConversations as ConversationItemDto[],
+      totalCount,
+    };
+  }
+
   async forwardMessage(forwardData: ForwardMessageDto, userId: string) {
     // Get the original message
     const originalMessage = await this.prisma.message.findUnique({
@@ -997,7 +1272,7 @@ export class MessageService {
     // Process each target
     for (const target of forwardData.targets) {
       try {
-        let newMessage;
+        let newMessage: PrismaMessage;
 
         if (target.userId) {
           // Prevent self-forwarding

@@ -6,9 +6,10 @@ import {
   MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { UseGuards } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, UseGuards } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessageService } from './message.service';
@@ -18,19 +19,30 @@ import { CreateReactionDto } from './dtos/create-reaction.dto';
 
 import { WsJwtGuard } from '../auth/guards/ws-jwt.guard';
 
+@Injectable()
 @WebSocketGateway({
   cors: {
     origin: '*',
   },
-  namespace: '/messages',
+  namespace: '/message',
+  pingInterval: 10000, // 10 seconds
+  pingTimeout: 15000, // 15 seconds
 })
 export class MessageGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    OnGatewayInit,
+    OnModuleDestroy
 {
   @WebSocketServer()
   server: Server;
 
+  private readonly logger = new Logger(MessageGateway.name);
   private userSockets: Map<string, Set<Socket>> = new Map();
+  private socketToUser: Map<string, string> = new Map();
+  private lastActivity: Map<string, number> = new Map();
+  private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly jwtService: JwtService,
@@ -56,6 +68,9 @@ export class MessageGateway
       this.userSockets.set(userId, new Set());
     }
     this.userSockets.get(userId).add(socket);
+    this.socketToUser.set(socket.id, userId);
+    this.lastActivity.set(socket.id, Date.now());
+    this.logger.debug(`User ${userId} connected with socket ${socket.id}`);
   }
 
   private removeUserSocket(userId: string, socket: Socket) {
@@ -66,6 +81,26 @@ export class MessageGateway
         this.userSockets.delete(userId);
       }
     }
+    this.socketToUser.delete(socket.id);
+    this.lastActivity.delete(socket.id);
+    this.logger.debug(`Socket ${socket.id} for user ${userId} removed`);
+  }
+
+  onModuleDestroy() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+      this.logger.log('WebSocket Gateway cleanup interval cleared');
+    }
+  }
+
+  afterInit(_server: Server) {
+    this.logger.log('WebSocket Gateway initialized');
+
+    // Setup cleanup interval to run every minute
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupInactiveSockets();
+    }, 60000); // 1 minute
   }
 
   async handleConnection(client: Socket) {
@@ -98,6 +133,37 @@ export class MessageGateway
     });
   }
 
+  private cleanupInactiveSockets() {
+    const now = Date.now();
+    const inactivityThreshold = 2 * 60 * 1000; // 2 minutes
+
+    this.logger.debug(
+      `Running socket cleanup, checking ${this.lastActivity.size} sockets`,
+    );
+
+    for (const [socketId, lastActive] of this.lastActivity.entries()) {
+      if (now - lastActive > inactivityThreshold) {
+        const userId = this.socketToUser.get(socketId);
+        if (userId) {
+          this.logger.warn(
+            `Socket ${socketId} for user ${userId} inactive for too long, disconnecting`,
+          );
+
+          // Find the socket instance
+          const userSockets = this.userSockets.get(userId);
+          if (userSockets) {
+            for (const socket of userSockets) {
+              if (socket.id === socketId) {
+                socket.disconnect(true);
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   handleDisconnect(client: Socket) {
     this.getUserFromSocket(client).then((userId) => {
       if (userId) {
@@ -116,6 +182,14 @@ export class MessageGateway
   }
 
   @UseGuards(WsJwtGuard)
+  @SubscribeMessage('heartbeat')
+  handleHeartbeat(@ConnectedSocket() client: Socket) {
+    const socketId = client.id;
+    this.lastActivity.set(socketId, Date.now());
+    return { status: 'ok', timestamp: Date.now() };
+  }
+
+  @UseGuards(WsJwtGuard)
   @SubscribeMessage('sendUserMessage')
   async handleUserMessage(
     @ConnectedSocket() client: Socket,
@@ -125,6 +199,8 @@ export class MessageGateway
     if (!userId) return;
 
     try {
+      // Update last activity
+      this.lastActivity.set(client.id, Date.now());
       const savedMessage = await this.messageService.createUserMessage(
         message,
         userId,
@@ -166,6 +242,8 @@ export class MessageGateway
     if (!userId) return;
 
     try {
+      // Update last activity
+      this.lastActivity.set(client.id, Date.now());
       const savedMessage = await this.messageService.createGroupMessage(
         message,
         userId,
@@ -201,6 +279,8 @@ export class MessageGateway
     if (!userId) return;
 
     try {
+      // Update last activity
+      this.lastActivity.set(client.id, Date.now());
       const updatedMessage = await this.messageService.readMessage(
         data.messageId,
         userId,
@@ -245,6 +325,8 @@ export class MessageGateway
     if (!userId) return;
 
     try {
+      // Update last activity
+      this.lastActivity.set(client.id, Date.now());
       const recalledMessage = await this.messageService.recallMessage(
         data.messageId,
         userId,
@@ -285,6 +367,8 @@ export class MessageGateway
     if (!userId) return;
 
     try {
+      // Update last activity
+      this.lastActivity.set(client.id, Date.now());
       const updatedMessage = await this.messageService.addReaction(
         reaction,
         userId,
@@ -326,6 +410,8 @@ export class MessageGateway
     if (!userId) return;
 
     try {
+      // Update last activity
+      this.lastActivity.set(client.id, Date.now());
       const updatedMessage = await this.messageService.removeReaction(
         data.messageId,
         userId,
@@ -358,6 +444,37 @@ export class MessageGateway
   }
 
   @UseGuards(WsJwtGuard)
+  @SubscribeMessage('getUserStatus')
+  async handleGetUserStatus(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { userIds: string[] },
+  ) {
+    const requestingUserId = await this.getUserFromSocket(client);
+    if (!requestingUserId) return;
+
+    // Update last activity
+    this.lastActivity.set(client.id, Date.now());
+
+    try {
+      const statusMap = {};
+
+      for (const userId of data.userIds) {
+        const isOnline =
+          this.userSockets.has(userId) && this.userSockets.get(userId).size > 0;
+        statusMap[userId] = {
+          userId,
+          status: isOnline ? 'online' : 'offline',
+          timestamp: Date.now(),
+        };
+      }
+
+      return statusMap;
+    } catch (error) {
+      client.emit('error', { message: error.message });
+    }
+  }
+
+  @UseGuards(WsJwtGuard)
   @SubscribeMessage('typing')
   async handleTyping(
     @ConnectedSocket() client: Socket,
@@ -365,6 +482,9 @@ export class MessageGateway
   ) {
     const userId = await this.getUserFromSocket(client);
     if (!userId) return;
+
+    // Update last activity
+    this.lastActivity.set(client.id, Date.now());
 
     const typingEvent = {
       userId,
@@ -393,6 +513,9 @@ export class MessageGateway
     const userId = await this.getUserFromSocket(client);
     if (!userId) return;
 
+    // Update last activity
+    this.lastActivity.set(client.id, Date.now());
+
     const typingEvent = {
       userId,
       timestamp: new Date(),
@@ -419,6 +542,9 @@ export class MessageGateway
   ) {
     const userId = await this.getUserFromSocket(client);
     if (!userId) return;
+
+    // Update last activity
+    this.lastActivity.set(client.id, Date.now());
 
     try {
       // Get the message details

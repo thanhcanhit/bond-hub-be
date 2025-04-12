@@ -1,0 +1,342 @@
+{
+  "info": {
+    "name": "BondHub - Conversation List Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Login to get access token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Parse the response",
+              "const responseJson = pm.response.json();",
+              "",
+              "// Check if the response has the expected structure",
+              "pm.test(\"Response has access token\", function () {",
+              "    pm.expect(responseJson).to.have.property('accessToken');",
+              "    pm.expect(responseJson).to.have.property('refreshToken');",
+              "});",
+              "",
+              "// Save the access token to a variable for use in other requests",
+              "if (responseJson.accessToken) {",
+              "    pm.collectionVariables.set('accessToken', responseJson.accessToken);",
+              "}",
+              "",
+              "// Save the user ID if available",
+              "if (responseJson.user && responseJson.user.id) {",
+              "    pm.collectionVariables.set('userId', responseJson.user.id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"email\": \"{{userEmail}}\",\n    \"password\": \"{{userPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{apiUrl}}/auth/login",
+          "host": ["{{apiUrl}}"],
+          "path": ["auth", "login"]
+        },
+        "description": "Login to get an access token for subsequent requests"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Conversation List",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Parse the response",
+              "const responseJson = pm.response.json();",
+              "",
+              "// Check if the response has the expected structure",
+              "pm.test(\"Response has conversations array\", function () {",
+              "    pm.expect(responseJson).to.have.property('conversations');",
+              "    pm.expect(responseJson.conversations).to.be.an('array');",
+              "    pm.expect(responseJson).to.have.property('totalCount');",
+              "    pm.expect(responseJson.totalCount).to.be.a('number');",
+              "});",
+              "",
+              "// If there are conversations, check the structure of the first one",
+              "if (responseJson.conversations && responseJson.conversations.length > 0) {",
+              "    const firstConversation = responseJson.conversations[0];",
+              "    ",
+              "    pm.test(\"Conversation has correct structure\", function () {",
+              "        pm.expect(firstConversation).to.have.property('id');",
+              "        pm.expect(firstConversation).to.have.property('type');",
+              "        pm.expect(['USER', 'GROUP']).to.include(firstConversation.type);",
+              "        pm.expect(firstConversation).to.have.property('unreadCount');",
+              "        pm.expect(firstConversation).to.have.property('updatedAt');",
+              "        ",
+              "        // Check type-specific properties",
+              "        if (firstConversation.type === 'USER') {",
+              "            pm.expect(firstConversation).to.have.property('user');",
+              "            pm.expect(firstConversation.user).to.have.property('id');",
+              "            pm.expect(firstConversation.user).to.have.property('fullName');",
+              "        } else if (firstConversation.type === 'GROUP') {",
+              "            pm.expect(firstConversation).to.have.property('group');",
+              "            pm.expect(firstConversation.group).to.have.property('id');",
+              "            pm.expect(firstConversation.group).to.have.property('name');",
+              "        }",
+              "        ",
+              "        // Check last message if exists",
+              "        if (firstConversation.lastMessage) {",
+              "            pm.expect(firstConversation.lastMessage).to.have.property('id');",
+              "            pm.expect(firstConversation.lastMessage).to.have.property('content');",
+              "            pm.expect(firstConversation.lastMessage).to.have.property('senderId');",
+              "            pm.expect(firstConversation.lastMessage).to.have.property('createdAt');",
+              "            pm.expect(firstConversation.lastMessage).to.have.property('isRead');",
+              "        }",
+              "    });",
+              "    ",
+              "    // Save the first conversation ID for potential use in other tests",
+              "    pm.collectionVariables.set('conversationId', firstConversation.id);",
+              "    pm.collectionVariables.set('conversationType', firstConversation.type);",
+              "}",
+              "",
+              "// Check pagination parameters",
+              "const url = new URL(pm.request.url);",
+              "const page = url.searchParams.get('page') || '1';",
+              "const limit = url.searchParams.get('limit') || '20';",
+              "",
+              "pm.test(\"Pagination parameters are respected\", function () {",
+              "    // If we have fewer conversations than the limit, the total should match",
+              "    if (responseJson.conversations.length < parseInt(limit)) {",
+              "        pm.expect(responseJson.conversations.length).to.be.at.most(parseInt(limit));",
+              "    } else {",
+              "        // Otherwise we should have exactly the limit number of conversations",
+              "        pm.expect(responseJson.conversations.length).to.equal(parseInt(limit));",
+              "    }",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{apiUrl}}/messages/conversations?page=1&limit=20",
+          "host": ["{{apiUrl}}"],
+          "path": ["messages", "conversations"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "20"
+            }
+          ]
+        },
+        "description": "Get the list of conversations (both direct and group) for the current user"
+      },
+      "response": []
+    },
+    {
+      "name": "Get User Messages",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Parse the response",
+              "const responseJson = pm.response.json();",
+              "",
+              "// Check if the response is an array of messages",
+              "pm.test(\"Response is an array of messages\", function () {",
+              "    pm.expect(responseJson).to.be.an('array');",
+              "});",
+              "",
+              "// If there are messages, check the structure of the first one",
+              "if (responseJson && responseJson.length > 0) {",
+              "    const firstMessage = responseJson[0];",
+              "    ",
+              "    pm.test(\"Message has correct structure\", function () {",
+              "        pm.expect(firstMessage).to.have.property('id');",
+              "        pm.expect(firstMessage).to.have.property('content');",
+              "        pm.expect(firstMessage).to.have.property('senderId');",
+              "        pm.expect(firstMessage).to.have.property('receiverId');",
+              "        pm.expect(firstMessage).to.have.property('createdAt');",
+              "        pm.expect(firstMessage).to.have.property('updatedAt');",
+              "        pm.expect(firstMessage).to.have.property('recalled');",
+              "        pm.expect(firstMessage).to.have.property('readBy');",
+              "        pm.expect(firstMessage.readBy).to.be.an('array');",
+              "    });",
+              "    ",
+              "    // Save the first message ID for potential use in other tests",
+              "    pm.collectionVariables.set('messageId', firstMessage.id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{apiUrl}}/messages/user/{{receiverId}}?page=1",
+          "host": ["{{apiUrl}}"],
+          "path": ["messages", "user", "{{receiverId}}"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            }
+          ]
+        },
+        "description": "Get messages between the current user and another user"
+      },
+      "response": []
+    },
+    {
+      "name": "Send Message to User",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Parse the response",
+              "const responseJson = pm.response.json();",
+              "",
+              "// Check if the response has the expected structure",
+              "pm.test(\"Message was created successfully\", function () {",
+              "    pm.expect(responseJson).to.have.property('id');",
+              "    pm.expect(responseJson).to.have.property('content');",
+              "    pm.expect(responseJson).to.have.property('senderId');",
+              "    pm.expect(responseJson).to.have.property('receiverId');",
+              "    pm.expect(responseJson.senderId).to.equal(pm.collectionVariables.get('userId'));",
+              "    pm.expect(responseJson.receiverId).to.equal(pm.collectionVariables.get('receiverId'));",
+              "});",
+              "",
+              "// Save the message ID for potential use in other tests",
+              "pm.collectionVariables.set('messageId', responseJson.id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"receiverId\": \"{{receiverId}}\",\n    \"content\": {\n        \"text\": \"Hello, this is a test message from Postman!\"\n    }\n}"
+        },
+        "url": {
+          "raw": "{{apiUrl}}/messages/user",
+          "host": ["{{apiUrl}}"],
+          "path": ["messages", "user"]
+        },
+        "description": "Send a message to another user"
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "apiUrl",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    {
+      "key": "userEmail",
+      "value": "user@example.com",
+      "type": "string"
+    },
+    {
+      "key": "userPassword",
+      "value": "password123",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "receiverId",
+      "value": "",
+      "type": "string",
+      "description": "ID of the user to send messages to"
+    },
+    {
+      "key": "conversationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "conversationType",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "messageId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

@@ -29,6 +29,16 @@ export class MessageController {
     private readonly messageGateway: MessageGateway,
   ) {}
 
+  @Get('/conversations')
+  async getConversationList(
+    @Request() req: Request,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    const requestUserId = req['user'].sub;
+    return this.messageService.getConversationList(requestUserId, page, limit);
+  }
+
   @Get('/group/:groupId')
   async getGroupMessages(
     @Request() req: Request,
