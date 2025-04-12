@@ -1,7 +1,7 @@
 {
   "info": {
     "_postman_id": "a5e7b8c9-d0e1-4f23-a456-789b0c1d2e3f",
-    "name": "BondHub - Kiểm thử Tin nhắn",
+    "name": "Vodka - Kiểm thử Tin nhắn 12/4",
     "description": "Bộ kiểm thử API cho các chức năng tin nhắn trong ứng dụng BondHub",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -101,6 +101,80 @@
       "item": [
         {
           "name": "Lấy danh sách cuộc trò chuyện",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "",
+                  "pm.test(\"Phản hồi có cấu trúc đúng\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(jsonData).to.have.property('conversations');",
+                  "    pm.expect(jsonData).to.have.property('totalCount');",
+                  "    pm.expect(jsonData.conversations).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Kiểm tra chi tiết cuộc trò chuyện nếu có",
+                  "if (jsonData.conversations && jsonData.conversations.length > 0) {",
+                  "    var firstConversation = jsonData.conversations[0];",
+                  "    ",
+                  "    pm.test(\"Cuộc trò chuyện có cấu trúc đúng\", function () {",
+                  "        pm.expect(firstConversation).to.have.property('id');",
+                  "        pm.expect(firstConversation).to.have.property('type');",
+                  "        pm.expect(['USER', 'GROUP']).to.include(firstConversation.type);",
+                  "        pm.expect(firstConversation).to.have.property('unreadCount');",
+                  "        pm.expect(firstConversation).to.have.property('updatedAt');",
+                  "        ",
+                  "        // Kiểm tra thuộc tính theo loại cuộc trò chuyện",
+                  "        if (firstConversation.type === 'USER') {",
+                  "            pm.expect(firstConversation).to.have.property('user');",
+                  "            pm.expect(firstConversation.user).to.have.property('id');",
+                  "            pm.expect(firstConversation.user).to.have.property('fullName');",
+                  "        } else if (firstConversation.type === 'GROUP') {",
+                  "            pm.expect(firstConversation).to.have.property('group');",
+                  "            pm.expect(firstConversation.group).to.have.property('id');",
+                  "            pm.expect(firstConversation.group).to.have.property('name');",
+                  "        }",
+                  "        ",
+                  "        // Kiểm tra tin nhắn cuối cùng nếu có",
+                  "        if (firstConversation.lastMessage) {",
+                  "            pm.expect(firstConversation.lastMessage).to.have.property('id');",
+                  "            pm.expect(firstConversation.lastMessage).to.have.property('content');",
+                  "            pm.expect(firstConversation.lastMessage).to.have.property('senderId');",
+                  "            pm.expect(firstConversation.lastMessage).to.have.property('createdAt');",
+                  "        }",
+                  "    });",
+                  "    ",
+                  "    // Lưu ID cuộc trò chuyện đầu tiên để sử dụng trong các test khác",
+                  "    if (firstConversation.type === 'USER') {",
+                  "        pm.collectionVariables.set(\"receiverId\", firstConversation.user.id);",
+                  "        console.log(\"Đã lưu ID người nhận từ cuộc trò chuyện đầu tiên\");",
+                  "    } else if (firstConversation.type === 'GROUP') {",
+                  "        pm.collectionVariables.set(\"groupId\", firstConversation.group.id);",
+                  "        console.log(\"Đã lưu ID nhóm từ cuộc trò chuyện đầu tiên\");",
+                  "    }",
+                  "}",
+                  "",
+                  "// Kiểm tra phân trang",
+                  "var url = pm.request.url.toString();",
+                  "var pageMatch = url.match(/page=(\\d+)/);",
+                  "var limitMatch = url.match(/limit=(\\d+)/);",
+                  "var page = pageMatch ? parseInt(pageMatch[1]) : 1;",
+                  "var limit = limitMatch ? parseInt(limitMatch[1]) : 20;",
+                  "",
+                  "pm.test(\"Phân trang hoạt động đúng\", function () {",
+                  "    if (jsonData.conversations.length < limit) {",
+                  "        pm.expect(jsonData.conversations.length).to.be.at.most(limit);",
+                  "    } else {",
+                  "        pm.expect(jsonData.conversations.length).to.equal(limit);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -123,7 +197,8 @@
                   "value": "20"
                 }
               ]
-            }
+            },
+            "description": "Lấy danh sách cuộc trò chuyện của người dùng hiện tại, bao gồm cả trò chuyện cá nhân và nhóm"
           }
         }
       ]
