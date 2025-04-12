@@ -1,41 +1,59 @@
 # Builder stage
-FROM node:20-alpine AS build-stage
-
+FROM node:20-alpine AS deps
 WORKDIR /app
 
-# Copy package files and install all dependencies
+# Install dependencies first (better layer caching)
 COPY package*.json ./
-RUN npm install
-
-# Copy Prisma schema and generate client
 COPY prisma ./prisma/
-RUN npx prisma generate
+RUN npm ci && npx prisma generate
 
-# Copy source code and build application
+# Build stage
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/node_modules/.prisma ./node_modules/.prisma
+
+# Copy source code
 COPY . .
+
+# Build application
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine AS production
-
-# Cài đặt các gói cần thiết để sử dụng pg_isready
-RUN apk add --no-cache postgresql-client
-
+FROM node:20-alpine AS runner
 WORKDIR /app
 
-# Copy package files and install only production dependencies
-COPY package*.json ./
-RUN npm install
+# Install production dependencies and postgresql-client
+RUN apk add --no-cache postgresql-client tini
 
-# Copy Prisma schema and generate client
-COPY prisma ./prisma/
-RUN npx prisma generate
+# Create non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-# Copy built application and Prisma client from builder
-COPY --from=build-stage /app/dist ./dist
-COPY --from=build-stage /app/node_modules/.prisma ./node_modules/.prisma
+# Copy necessary files from builder
+COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
+COPY --from=builder --chown=appuser:appgroup /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=appuser:appgroup /app/package*.json ./
 
-# Expose port and define runtime command
+# Install only production dependencies and disable prepare script
+RUN npm ci --only=production --ignore-scripts
+
+# Set proper permissions
+RUN chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+
+# Expose port
 EXPOSE 3000
-# Lệnh khởi động ứng dụng
+
+# Use tini as init system
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Start the application
 CMD ["npm", "run", "start:prod"]
