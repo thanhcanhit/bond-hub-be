@@ -1,59 +1,60 @@
 # Builder stage
-FROM node:20-alpine AS deps
+FROM node:20-alpine AS build-stage
+
 WORKDIR /app
 
-# Install dependencies first (better layer caching)
+# Copy package files and install ALL dependencies (including dev dependencies)
 COPY package*.json ./
+RUN npm install
+
+# Copy Prisma schema and generate client
 COPY prisma ./prisma/
-RUN npm ci && npx prisma generate
+RUN npx prisma generate
 
-# Build stage
-FROM node:20-alpine AS builder
-WORKDIR /app
-
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/node_modules/.prisma ./node_modules/.prisma
-
-# Copy source code
+# Copy source code and build application
 COPY . .
-
-# Build application
-RUN npm run build
+RUN npm run build && ls -la dist
 
 # Production stage
-FROM node:20-alpine AS runner
+FROM node:20-alpine AS production
+
+# Install PostgreSQL client and build dependencies
+RUN apk add --no-cache postgresql-client python3 make g++
+
 WORKDIR /app
 
-# Install production dependencies and postgresql-client
-RUN apk add --no-cache postgresql-client tini
+# Copy package files and install ONLY production dependencies
+COPY package*.json ./
+RUN npm install --omit=dev --ignore-scripts && \
+    npm install -g ts-node typescript && \
+    npm rebuild bcrypt --build-from-source
 
-# Create non-root user
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Copy Prisma files
+COPY prisma ./prisma/
+RUN npx prisma generate
 
-# Copy necessary files from builder
-COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
-COPY --from=builder --chown=appuser:appgroup /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder --chown=appuser:appgroup /app/package*.json ./
+# Copy built application from builder
+COPY --from=build-stage /app/dist ./dist
+COPY --from=build-stage /app/node_modules/.prisma ./node_modules/.prisma
 
-# Install only production dependencies and disable prepare script
-RUN npm ci --only=production --ignore-scripts
+# Copy necessary TypeScript type definitions
+COPY --from=build-stage /app/node_modules/@types ./node_modules/@types
 
-# Set proper permissions
-RUN chown -R appuser:appgroup /app
+# Copy additional required dependencies
+COPY --from=build-stage /app/node_modules/@nestjs ./node_modules/@nestjs
+COPY --from=build-stage /app/node_modules/keyv ./node_modules/keyv
+COPY --from=build-stage /app/node_modules/json-buffer ./node_modules/json-buffer
+COPY --from=build-stage /app/node_modules/cache-manager ./node_modules/cache-manager
 
-# Switch to non-root user
-USER appuser
+# Create a custom package.json for production
+RUN echo '{"name":"bond-hub-be","version":"0.0.1","scripts":{"start":"node dist/src/main.js","start:prod":"node dist/src/main.js","db:migrate":"prisma migrate deploy","db:seed":"prisma db seed","db:setup":"npm run db:migrate && npm run db:seed"},"prisma":{"seed":"ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"}}' > package.json
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+# Copy seed data and TypeScript config
+COPY --from=build-stage /app/prisma/seed.ts ./prisma/
+COPY --from=build-stage /app/tsconfig.json ./
 
 # Expose port
 EXPOSE 3000
 
-# Use tini as init system
-ENTRYPOINT ["/sbin/tini", "--"]
-
-# Start the application
-CMD ["npm", "run", "start:prod"]
+# Start application
+CMD ["npm", "start"]
