@@ -122,7 +122,7 @@ export class ContactService {
    * @param userId ID của người dùng
    */
   async getUserContacts(userId: string) {
-    return this.prisma.contact.findMany({
+    const contacts = await this.prisma.contact.findMany({
       where: {
         userId: userId,
       },
@@ -147,5 +147,80 @@ export class ContactService {
         addedAt: 'desc',
       },
     });
+
+    // Lấy thông tin mối quan hệ cho từng contact
+    const contactsWithRelationship = await Promise.all(
+      contacts.map(async (contact) => {
+        const relationship = await this.prisma.friend.findFirst({
+          where: {
+            OR: [
+              {
+                senderId: userId,
+                receiverId: contact.contactUserId,
+              },
+              {
+                senderId: contact.contactUserId,
+                receiverId: userId,
+              },
+            ],
+          },
+        });
+
+        let relationshipStatus = {
+          status: 'NONE',
+          message: 'Không có mối quan hệ',
+          friendshipId: null,
+        };
+
+        if (relationship) {
+          switch (relationship.status) {
+            case 'ACCEPTED':
+              relationshipStatus = {
+                status: 'FRIEND',
+                message: 'Đã là bạn bè',
+                friendshipId: relationship.id,
+              };
+              break;
+            case 'PENDING':
+              if (relationship.senderId === userId) {
+                relationshipStatus = {
+                  status: 'PENDING_SENT',
+                  message: 'Đã gửi lời mời kết bạn',
+                  friendshipId: relationship.id,
+                };
+              } else {
+                relationshipStatus = {
+                  status: 'PENDING_RECEIVED',
+                  message: 'Đã nhận lời mời kết bạn',
+                  friendshipId: relationship.id,
+                };
+              }
+              break;
+            case 'BLOCKED':
+              if (relationship.senderId === userId) {
+                relationshipStatus = {
+                  status: 'BLOCKED',
+                  message: 'Bạn đã chặn người dùng này',
+                  friendshipId: relationship.id,
+                };
+              } else {
+                relationshipStatus = {
+                  status: 'BLOCKED_BY',
+                  message: 'Bạn đã bị người dùng này chặn',
+                  friendshipId: relationship.id,
+                };
+              }
+              break;
+          }
+        }
+
+        return {
+          ...contact,
+          relationship: relationshipStatus,
+        };
+      }),
+    );
+
+    return contactsWithRelationship;
   }
 }
