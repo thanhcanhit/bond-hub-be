@@ -21,8 +21,12 @@ export class UserController {
   }
 
   @Get(':id')
-  async getUserById(@Param('id') id: string) {
-    const user = await this.userService.getUserById(id);
+  async getUserById(@Param('id') id: string, @Request() req: Request) {
+    // Extract the current user ID from the request
+    const currentUserId = req['user']?.sub;
+
+    // Get user with privacy restrictions based on relationship
+    const user = await this.userService.getUserById(id, currentUserId);
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -44,7 +48,7 @@ export class UserController {
     @Request() req: Request,
   ) {
     try {
-      const currentUserId = req['user'].sub;
+      const currentUserId = req['user']?.sub;
       return await this.userService.searchUserByEmailOrPhone(
         searchUserDto.email,
         searchUserDto.phoneNumber,
