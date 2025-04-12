@@ -749,6 +749,226 @@
 				}
 			],
 			"description": "Các request liên quan đến tin nhắn có hình ảnh"
+		},
+		{
+			"name": "Chuyển tiếp tin nhắn",
+			"item": [
+				{
+					"name": "Chuyển tiếp tin nhắn đến người dùng",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"",
+									"pm.test(\"Chuyển tiếp tin nhắn thành công\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    pm.expect(jsonData).to.be.an('array');",
+									"    pm.expect(jsonData[0]).to.have.property('type').eql('user');",
+									"    pm.expect(jsonData[0]).to.have.property('success').eql(true);",
+									"    pm.expect(jsonData[0].message).to.have.property('forwardedFrom');",
+									"    ",
+									"    // Lưu ID tin nhắn đã chuyển tiếp để sử dụng sau",
+									"    if (jsonData[0].message && jsonData[0].message.id) {",
+									"        pm.environment.set(\"forwardedMessageId\", jsonData[0].message.id);",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"messageId\": \"{{lastMessageId}}\",\n  \"targets\": [\n    {\n      \"userId\": \"{{receiverId}}\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/messages/forward",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"messages",
+								"forward"
+							]
+						},
+						"description": "Chuyển tiếp tin nhắn đến một người dùng cụ thể"
+					},
+					"response": []
+				},
+				{
+					"name": "Chuyển tiếp tin nhắn đến nhóm",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"",
+									"pm.test(\"Chuyển tiếp tin nhắn đến nhóm thành công\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    pm.expect(jsonData).to.be.an('array');",
+									"    pm.expect(jsonData[0]).to.have.property('type').eql('group');",
+									"    pm.expect(jsonData[0]).to.have.property('success').eql(true);",
+									"    pm.expect(jsonData[0].message).to.have.property('forwardedFrom');",
+									"    pm.expect(jsonData[0].message).to.have.property('groupId');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"messageId\": \"{{lastMessageId}}\",\n  \"targets\": [\n    {\n      \"groupId\": \"{{groupId}}\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/messages/forward",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"messages",
+								"forward"
+							]
+						},
+						"description": "Chuyển tiếp tin nhắn đến một nhóm"
+					},
+					"response": []
+				},
+				{
+					"name": "Chuyển tiếp tin nhắn đến nhiều đích",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"",
+									"pm.test(\"Chuyển tiếp tin nhắn đến nhiều đích thành công\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    pm.expect(jsonData).to.be.an('array');",
+									"    pm.expect(jsonData.length).to.be.greaterThan(1);",
+									"    ",
+									"    // Kiểm tra kết quả cho từng đích",
+									"    jsonData.forEach(function(result) {",
+									"        pm.expect(result).to.have.property('success');",
+									"        if (result.success) {",
+									"            pm.expect(result.message).to.have.property('forwardedFrom');",
+									"            pm.expect(result).to.have.property('type').to.be.oneOf(['user', 'group']);",
+									"        }",
+									"    });",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"messageId\": \"{{lastMessageId}}\",\n  \"targets\": [\n    {\n      \"userId\": \"{{receiverId}}\"\n    },\n    {\n      \"groupId\": \"{{groupId}}\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/messages/forward",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"messages",
+								"forward"
+							]
+						},
+						"description": "Chuyển tiếp tin nhắn đến nhiều người dùng và nhóm cùng lúc"
+					},
+					"response": []
+				},
+				{
+					"name": "Chuyển tiếp tin nhắn không tồn tại",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Chuyển tiếp tin nhắn không tồn tại thất bại\", function () {",
+									"    pm.response.to.have.status(404);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message').contains('not found');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{accessToken}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"messageId\": \"00000000-0000-0000-0000-000000000000\",\n  \"targets\": [\n    {\n      \"userId\": \"{{receiverId}}\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{apiUrl}}/messages/forward",
+							"host": [
+								"{{apiUrl}}"
+							],
+							"path": [
+								"messages",
+								"forward"
+							]
+						},
+						"description": "Thử chuyển tiếp một tin nhắn không tồn tại"
+					},
+					"response": []
+				}
+			],
+			"description": "Các request liên quan đến chức năng chuyển tiếp tin nhắn"
 		}
 	]
 }
+

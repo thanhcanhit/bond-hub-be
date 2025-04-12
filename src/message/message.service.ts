@@ -22,6 +22,7 @@ import {
 } from './dtos/message-media.dto';
 import { StorageService } from 'src/storage/storage.service';
 import { v4 as uuidv4 } from 'uuid';
+import { ForwardMessageDto } from './dtos/forward-message.dto';
 
 const PAGE_SIZE = 30;
 
@@ -979,5 +980,93 @@ export class MessageService {
     } else {
       return MediaType.OTHER;
     }
+  }
+
+  async forwardMessage(forwardData: ForwardMessageDto, userId: string) {
+    // Get the original message
+    const originalMessage = await this.prisma.message.findUnique({
+      where: { id: forwardData.messageId },
+    });
+
+    if (!originalMessage) {
+      throw new NotFoundException('Original message not found');
+    }
+
+    const results = [];
+
+    // Process each target
+    for (const target of forwardData.targets) {
+      try {
+        let newMessage;
+
+        if (target.userId) {
+          // Prevent self-forwarding
+          if (target.userId === userId) {
+            continue;
+          }
+
+          // Forward as user message
+          newMessage = await this.prisma.message.create({
+            data: {
+              senderId: userId,
+              receiverId: target.userId,
+              content: originalMessage.content,
+              messageType: 'USER',
+              forwardedFrom: originalMessage.id,
+            },
+          });
+
+          results.push({
+            type: 'user',
+            message: newMessage,
+            success: true,
+          });
+        } else if (target.groupId) {
+          // Check if user is member of the group
+          const isMember = await this.prisma.groupMember.findFirst({
+            where: {
+              groupId: target.groupId,
+              userId,
+            },
+          });
+
+          if (!isMember) {
+            results.push({
+              type: 'group',
+              groupId: target.groupId,
+              success: false,
+              error: 'Not a member of the group',
+            });
+            continue;
+          }
+
+          // Forward as group message
+          newMessage = await this.prisma.message.create({
+            data: {
+              senderId: userId,
+              groupId: target.groupId,
+              content: originalMessage.content,
+              messageType: 'GROUP',
+              forwardedFrom: originalMessage.id,
+            },
+          });
+
+          results.push({
+            type: 'group',
+            message: newMessage,
+            success: true,
+          });
+        }
+      } catch (error) {
+        results.push({
+          type: target.userId ? 'user' : 'group',
+          targetId: target.userId || target.groupId,
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+
+    return results;
   }
 }
