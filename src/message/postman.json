@@ -1,974 +1,515 @@
 {
-	"info": {
-		"_postman_id": "a5e7b8c9-d0e1-4f23-a456-789b0c1d2e3f",
-		"name": "BondHub - Kiểm thử Tin nhắn",
-		"description": "Bộ kiểm thử API cho các chức năng tin nhắn trong ứng dụng BondHub",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-	},
-	"variable": [
-		{
-			"key": "apiUrl",
-			"value": "http://localhost:3000",
-			"type": "string",
-			"description": "URL cơ sở của API"
-		},
-		{
-			"key": "accessToken",
-			"value": "",
-			"type": "string",
-			"description": "Token xác thực người dùng"
-		},
-		{
-			"key": "senderId",
-			"value": "",
-			"type": "string",
-			"description": "ID của người gửi tin nhắn"
-		},
-		{
-			"key": "receiverId",
-			"value": "",
-			"type": "string",
-			"description": "ID của người nhận tin nhắn"
-		}
-	],
-	"event": [
-		{
-			"listen": "prerequest",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					"// Đoạn mã này sẽ chạy trước mỗi request",
-					"// Bạn có thể thêm logic xác thực hoặc chuẩn bị dữ liệu ở đây"
-				]
-			}
-		},
-		{
-			"listen": "test",
-			"script": {
-				"type": "text/javascript",
-				"exec": [
-					"// Đoạn mã này sẽ chạy sau mỗi request",
-					"// Bạn có thể thêm các kiểm tra chung ở đây"
-				]
-			}
-		}
-	],
-	"item": [
-		{
-			"name": "Xác thực",
-			"item": [
-				{
-					"name": "Đăng nhập",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"// Lưu token xác thực vào biến môi trường",
-									"var jsonData = pm.response.json();",
-									"",
-									"if (jsonData && jsonData.accessToken) {",
-									"    pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
-									"    console.log(\"Đã lưu token xác thực\");",
-									"}",
-									"",
-									"// Lưu ID người dùng nếu có",
-									"if (jsonData && jsonData.user && jsonData.user.id) {",
-									"    pm.collectionVariables.set(\"senderId\", jsonData.user.id);",
-									"    console.log(\"Đã lưu ID người dùng\");",
-									"}",
-									"",
-									"pm.test(\"Đăng nhập thành công\", function () {",
-									"    pm.response.to.have.status(200);",
-									"    pm.expect(jsonData).to.have.property('accessToken');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"email\": \"your_email@example.com\",\n  \"password\": \"your_password\"\n}"
-						},
-						"url": {
-							"raw": "{{apiUrl}}/auth/login",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"auth",
-								"login"
-							]
-						},
-						"description": "Đăng nhập để lấy token xác thực"
-					},
-					"response": []
-				},
-				{
-					"name": "Thiết lập ID người nhận",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"// Thiết lập ID người nhận từ danh sách người dùng",
-									"var jsonData = pm.response.json();",
-									"",
-									"if (jsonData && jsonData.length > 0) {",
-									"    // Chọn người dùng đầu tiên khác với senderId",
-									"    var senderId = pm.collectionVariables.get(\"senderId\");",
-									"    ",
-									"    for (var i = 0; i < jsonData.length; i++) {",
-									"        if (jsonData[i].id !== senderId) {",
-									"            pm.collectionVariables.set(\"receiverId\", jsonData[i].id);",
-									"            console.log(\"Đã thiết lập ID người nhận: \" + jsonData[i].id);",
-									"            break;",
-									"        }",
-									"    }",
-									"}",
-									"",
-									"pm.test(\"Lấy danh sách người dùng thành công\", function () {",
-									"    pm.response.to.have.status(200);",
-									"    pm.expect(jsonData).to.be.an('array');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"url": {
-							"raw": "{{apiUrl}}/user",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"user"
-							]
-						},
-						"description": "Lấy danh sách người dùng để chọn người nhận tin nhắn"
-					},
-					"response": []
-				}
-			],
-			"description": "Các request liên quan đến xác thực và thiết lập biến"
-		},
-		{
-			"name": "Tin nhắn văn bản",
-			"item": [
-				{
-					"name": "Gửi tin nhắn văn bản",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"var jsonData = pm.response.json();",
-									"",
-									"if (jsonData && jsonData.id) {",
-									"    pm.environment.set(\"lastMessageId\", jsonData.id);",
-									"    console.log(\"Đã lưu ID tin nhắn: \" + jsonData.id);",
-									"}",
-									"",
-									"pm.test(\"Gửi tin nhắn thành công\", function () {",
-									"    pm.response.to.have.status(201);",
-									"    pm.expect(jsonData).to.have.property('id');",
-									"    pm.expect(jsonData.content).to.have.property('text');",
-									"    pm.expect(jsonData.content.text).to.eql(\"Đây là tin nhắn kiểm thử\");",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"receiverId\": \"{{receiverId}}\",\n  \"content\": {\n    \"text\": \"Đây là tin nhắn kiểm thử\"\n  }\n}"
-						},
-						"url": {
-							"raw": "{{apiUrl}}/messages/user",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"user"
-							]
-						},
-						"description": "Gửi tin nhắn văn bản đơn giản đến người nhận"
-					},
-					"response": []
-				},
-				{
-					"name": "Lấy tin nhắn giữa hai người dùng",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"Lấy tin nhắn thành công\", function () {",
-									"    pm.response.to.have.status(200);",
-									"    pm.expect(jsonData).to.be.an('array');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"url": {
-							"raw": "{{apiUrl}}/messages/user/{{receiverId}}?page=1",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"user",
-								"{{receiverId}}"
-							],
-							"query": [
-								{
-									"key": "page",
-									"value": "1"
-								}
-							]
-						},
-						"description": "Lấy lịch sử tin nhắn giữa người dùng hiện tại và người nhận"
-					},
-					"response": []
-				},
-				{
-					"name": "Tìm kiếm tin nhắn",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"Tìm kiếm tin nhắn thành công\", function () {",
-									"    pm.response.to.have.status(200);",
-									"    pm.expect(jsonData).to.be.an('array');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"url": {
-							"raw": "{{apiUrl}}/messages/user/{{receiverId}}/search?searchText=kiểm thử&page=1",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"user",
-								"{{receiverId}}",
-								"search"
-							],
-							"query": [
-								{
-									"key": "searchText",
-									"value": "kiểm thử"
-								},
-								{
-									"key": "page",
-									"value": "1"
-								}
-							]
-						},
-						"description": "Tìm kiếm tin nhắn chứa từ khóa cụ thể"
-					},
-					"response": []
-				},
-				{
-					"name": "Đánh dấu tin nhắn đã đọc",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"Đánh dấu đã đọc thành công\", function () {",
-									"    pm.response.to.have.status(200);",
-									"    pm.expect(jsonData.readBy).to.include(pm.collectionVariables.get(\"senderId\"));",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "PATCH",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"url": {
-							"raw": "{{apiUrl}}/messages/read/{{lastMessageId}}",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"read",
-								"{{lastMessageId}}"
-							]
-						},
-						"description": "Đánh dấu tin nhắn là đã đọc"
-					},
-					"response": []
-				},
-				{
-					"name": "Đánh dấu tin nhắn chưa đọc",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"Đánh dấu chưa đọc thành công\", function () {",
-									"    pm.response.to.have.status(200);",
-									"    pm.expect(jsonData.readBy).to.not.include(pm.collectionVariables.get(\"senderId\"));",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "PATCH",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"url": {
-							"raw": "{{apiUrl}}/messages/unread/{{lastMessageId}}",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"unread",
-								"{{lastMessageId}}"
-							]
-						},
-						"description": "Đánh dấu tin nhắn là chưa đọc"
-					},
-					"response": []
-				},
-				{
-					"name": "Thêm biểu cảm vào tin nhắn",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"Thêm biểu cảm thành công\", function () {",
-									"    pm.response.to.have.status(200);",
-									"    pm.expect(jsonData).to.have.property('reactions');",
-									"    pm.expect(jsonData.reactions).to.be.an('array');",
-									"    pm.expect(jsonData.reactions.length).to.be.greaterThan(0);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"messageId\": \"{{lastMessageId}}\",\n  \"reaction\": \"LIKE\"\n}"
-						},
-						"url": {
-							"raw": "{{apiUrl}}/messages/reaction",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"reaction"
-							]
-						},
-						"description": "Thêm biểu cảm (reaction) vào tin nhắn"
-					},
-					"response": []
-				},
-				{
-					"name": "Xóa biểu cảm khỏi tin nhắn",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"Xóa biểu cảm thành công\", function () {",
-									"    pm.response.to.have.status(200);",
-									"    ",
-									"    // Kiểm tra xem biểu cảm đã bị xóa chưa",
-									"    var userReaction = null;",
-									"    if (jsonData.reactions && jsonData.reactions.length > 0) {",
-									"        for (var i = 0; i < jsonData.reactions.length; i++) {",
-									"            if (jsonData.reactions[i].userId === pm.collectionVariables.get(\"senderId\")) {",
-									"                userReaction = jsonData.reactions[i];",
-									"                break;",
-									"            }",
-									"        }",
-									"    }",
-									"    ",
-									"    pm.expect(userReaction).to.be.null;",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "DELETE",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"url": {
-							"raw": "{{apiUrl}}/messages/reaction/{{lastMessageId}}",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"reaction",
-								"{{lastMessageId}}"
-							]
-						},
-						"description": "Xóa biểu cảm của người dùng khỏi tin nhắn"
-					},
-					"response": []
-				},
-				{
-					"name": "Thu hồi tin nhắn",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"Thu hồi tin nhắn thành công\", function () {",
-									"    pm.response.to.have.status(200);",
-									"    pm.expect(jsonData.recalled).to.be.true;",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "PATCH",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"url": {
-							"raw": "{{apiUrl}}/messages/recall/{{lastMessageId}}",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"recall",
-								"{{lastMessageId}}"
-							]
-						},
-						"description": "Thu hồi tin nhắn đã gửi (chỉ người gửi mới có thể thu hồi)"
-					},
-					"response": []
-				},
-				{
-					"name": "Xóa tin nhắn (phía người dùng)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"Xóa tin nhắn thành công\", function () {",
-									"    pm.response.to.have.status(200);",
-									"    pm.expect(jsonData.deletedBy).to.include(pm.collectionVariables.get(\"senderId\"));",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "DELETE",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"url": {
-							"raw": "{{apiUrl}}/messages/deleted-self-side/{{lastMessageId}}",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"deleted-self-side",
-								"{{lastMessageId}}"
-							]
-						},
-						"description": "Xóa tin nhắn ở phía người dùng hiện tại (không xóa hoàn toàn khỏi hệ thống)"
-					},
-					"response": []
-				}
-			],
-			"description": "Các request liên quan đến tin nhắn văn bản"
-		},
-		{
-			"name": "Tin nhắn có hình ảnh",
-			"item": [
-				{
-					"name": "Gửi tin nhắn có hình ảnh",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"var jsonData = pm.response.json();",
-									"",
-									"if (jsonData && jsonData.id) {",
-									"    pm.environment.set(\"lastMediaMessageId\", jsonData.id);",
-									"    console.log(\"Đã lưu ID tin nhắn có hình ảnh: \" + jsonData.id);",
-									"}",
-									"",
-									"pm.test(\"Gửi tin nhắn có hình ảnh thành công\", function () {",
-									"    pm.response.to.have.status(201);",
-									"    pm.expect(jsonData).to.have.property('id');",
-									"    pm.expect(jsonData.content).to.have.property('text');",
-									"    pm.expect(jsonData.content).to.have.property('media');",
-									"    pm.expect(jsonData.content.media).to.be.an('array');",
-									"    pm.expect(jsonData.content.media.length).to.be.greaterThan(0);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"body": {
-							"mode": "formdata",
-							"formdata": [
-								{
-									"key": "receiverId",
-									"value": "{{receiverId}}",
-									"type": "text"
-								},
-								{
-									"key": "content[text]",
-									"value": "Đây là tin nhắn có hình ảnh",
-									"type": "text"
-								},
-								{
-									"key": "files",
-									"type": "file",
-									"src": "/path/to/your/image.jpg",
-									"description": "Hình ảnh đính kèm"
-								}
-							]
-						},
-						"url": {
-							"raw": "{{apiUrl}}/messages/user",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"user"
-							]
-						},
-						"description": "Gửi tin nhắn kèm hình ảnh đến người nhận"
-					},
-					"response": []
-				},
-				{
-					"name": "Tải lên nhiều hình ảnh cho tin nhắn",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"var jsonData = pm.response.json();",
-									"",
-									"if (jsonData && jsonData.messageId) {",
-									"    pm.environment.set(\"lastMediaUploadId\", jsonData.messageId);",
-									"    console.log(\"Đã lưu ID tin nhắn có nhiều hình ảnh: \" + jsonData.messageId);",
-									"}",
-									"",
-									"pm.test(\"Tải lên nhiều hình ảnh thành công\", function () {",
-									"    pm.response.to.have.status(200);",
-									"    pm.expect(jsonData).to.have.property('messageId');",
-									"    pm.expect(jsonData).to.have.property('mediaItems');",
-									"    pm.expect(jsonData.mediaItems).to.be.an('array');",
-									"    pm.expect(jsonData.mediaItems.length).to.be.greaterThan(0);",
-									"    pm.expect(jsonData.success).to.be.true;",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"body": {
-							"mode": "formdata",
-							"formdata": [
-								{
-									"key": "receiverId",
-									"value": "{{receiverId}}",
-									"type": "text"
-								},
-								{
-									"key": "text",
-									"value": "Đây là tin nhắn có nhiều hình ảnh",
-									"type": "text"
-								},
-								{
-									"key": "mediaType",
-									"value": "IMAGE",
-									"type": "text"
-								},
-								{
-									"key": "files",
-									"type": "file",
-									"src": [
-										"/path/to/your/image1.jpg",
-										"/path/to/your/image2.jpg"
-									],
-									"description": "Nhiều hình ảnh đính kèm"
-								}
-							]
-						},
-						"url": {
-							"raw": "{{apiUrl}}/messages/media",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"media"
-							]
-						},
-						"description": "Tải lên nhiều hình ảnh cho một tin nhắn"
-					},
-					"response": []
-				}
-			],
-			"description": "Các request liên quan đến tin nhắn có hình ảnh"
-		},
-		{
-			"name": "Chuyển tiếp tin nhắn",
-			"item": [
-				{
-					"name": "Chuyển tiếp tin nhắn đến người dùng",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"Chuyển tiếp tin nhắn thành công\", function () {",
-									"    pm.response.to.have.status(201);",
-									"    pm.expect(jsonData).to.be.an('array');",
-									"    pm.expect(jsonData[0]).to.have.property('type').eql('user');",
-									"    pm.expect(jsonData[0]).to.have.property('success').eql(true);",
-									"    pm.expect(jsonData[0].message).to.have.property('forwardedFrom');",
-									"    ",
-									"    // Lưu ID tin nhắn đã chuyển tiếp để sử dụng sau",
-									"    if (jsonData[0].message && jsonData[0].message.id) {",
-									"        pm.environment.set(\"forwardedMessageId\", jsonData[0].message.id);",
-									"    }",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"messageId\": \"{{lastMessageId}}\",\n  \"targets\": [\n    {\n      \"userId\": \"{{receiverId}}\"\n    }\n  ]\n}"
-						},
-						"url": {
-							"raw": "{{apiUrl}}/messages/forward",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"forward"
-							]
-						},
-						"description": "Chuyển tiếp tin nhắn đến một người dùng cụ thể"
-					},
-					"response": []
-				},
-				{
-					"name": "Chuyển tiếp tin nhắn đến nhóm",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"Chuyển tiếp tin nhắn đến nhóm thành công\", function () {",
-									"    pm.response.to.have.status(201);",
-									"    pm.expect(jsonData).to.be.an('array');",
-									"    pm.expect(jsonData[0]).to.have.property('type').eql('group');",
-									"    pm.expect(jsonData[0]).to.have.property('success').eql(true);",
-									"    pm.expect(jsonData[0].message).to.have.property('forwardedFrom');",
-									"    pm.expect(jsonData[0].message).to.have.property('groupId');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"messageId\": \"{{lastMessageId}}\",\n  \"targets\": [\n    {\n      \"groupId\": \"{{groupId}}\"\n    }\n  ]\n}"
-						},
-						"url": {
-							"raw": "{{apiUrl}}/messages/forward",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"forward"
-							]
-						},
-						"description": "Chuyển tiếp tin nhắn đến một nhóm"
-					},
-					"response": []
-				},
-				{
-					"name": "Chuyển tiếp tin nhắn đến nhiều đích",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"var jsonData = pm.response.json();",
-									"",
-									"pm.test(\"Chuyển tiếp tin nhắn đến nhiều đích thành công\", function () {",
-									"    pm.response.to.have.status(201);",
-									"    pm.expect(jsonData).to.be.an('array');",
-									"    pm.expect(jsonData.length).to.be.greaterThan(1);",
-									"    ",
-									"    // Kiểm tra kết quả cho từng đích",
-									"    jsonData.forEach(function(result) {",
-									"        pm.expect(result).to.have.property('success');",
-									"        if (result.success) {",
-									"            pm.expect(result.message).to.have.property('forwardedFrom');",
-									"            pm.expect(result).to.have.property('type').to.be.oneOf(['user', 'group']);",
-									"        }",
-									"    });",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"messageId\": \"{{lastMessageId}}\",\n  \"targets\": [\n    {\n      \"userId\": \"{{receiverId}}\"\n    },\n    {\n      \"groupId\": \"{{groupId}}\"\n    }\n  ]\n}"
-						},
-						"url": {
-							"raw": "{{apiUrl}}/messages/forward",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"forward"
-							]
-						},
-						"description": "Chuyển tiếp tin nhắn đến nhiều người dùng và nhóm cùng lúc"
-					},
-					"response": []
-				},
-				{
-					"name": "Chuyển tiếp tin nhắn không tồn tại",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Chuyển tiếp tin nhắn không tồn tại thất bại\", function () {",
-									"    pm.response.to.have.status(404);",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('message').contains('not found');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "Authorization",
-								"value": "Bearer {{accessToken}}"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"messageId\": \"00000000-0000-0000-0000-000000000000\",\n  \"targets\": [\n    {\n      \"userId\": \"{{receiverId}}\"\n    }\n  ]\n}"
-						},
-						"url": {
-							"raw": "{{apiUrl}}/messages/forward",
-							"host": [
-								"{{apiUrl}}"
-							],
-							"path": [
-								"messages",
-								"forward"
-							]
-						},
-						"description": "Thử chuyển tiếp một tin nhắn không tồn tại"
-					},
-					"response": []
-				}
-			],
-			"description": "Các request liên quan đến chức năng chuyển tiếp tin nhắn"
-		}
-	]
+  "info": {
+    "_postman_id": "a5e7b8c9-d0e1-4f23-a456-789b0c1d2e3f",
+    "name": "BondHub - Kiểm thử Tin nhắn",
+    "description": "Bộ kiểm thử API cho các chức năng tin nhắn trong ứng dụng BondHub",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "apiUrl",
+      "value": "http://localhost:3000",
+      "type": "string",
+      "description": "URL cơ sở của API"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string",
+      "description": "Token xác thực người dùng"
+    },
+    {
+      "key": "senderId",
+      "value": "",
+      "type": "string",
+      "description": "ID của người gửi tin nhắn"
+    },
+    {
+      "key": "receiverId",
+      "value": "",
+      "type": "string",
+      "description": "ID của người nhận tin nhắn"
+    },
+    {
+      "key": "groupId",
+      "value": "",
+      "type": "string",
+      "description": "ID của nhóm"
+    },
+    {
+      "key": "messageId",
+      "value": "",
+      "type": "string",
+      "description": "ID của tin nhắn"
+    }
+  ],
+  "item": [
+    {
+      "name": "Xác thực",
+      "item": [
+        {
+          "name": "Đăng nhập",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "",
+                  "if (jsonData && jsonData.accessToken) {",
+                  "    pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
+                  "    console.log(\"Đã lưu token xác thực\");",
+                  "}",
+                  "",
+                  "if (jsonData && jsonData.user && jsonData.user.id) {",
+                  "    pm.collectionVariables.set(\"senderId\", jsonData.user.id);",
+                  "    console.log(\"Đã lưu ID người dùng\");",
+                  "}",
+                  "",
+                  "pm.test(\"Đăng nhập thành công\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(jsonData).to.have.property('accessToken');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"password123\",\n    \"deviceType\": \"WEB\"\n}"
+            },
+            "url": {
+              "raw": "{{apiUrl}}/auth/login",
+              "host": ["{{apiUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cuộc trò chuyện",
+      "item": [
+        {
+          "name": "Lấy danh sách cuộc trò chuyện",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{apiUrl}}/messages/conversations?page=1&limit=20",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "conversations"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tin nhắn cá nhân",
+      "item": [
+        {
+          "name": "Lấy tin nhắn với người dùng",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{apiUrl}}/messages/user/{{receiverId}}?page=1",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "user", "{{receiverId}}"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tìm kiếm tin nhắn với người dùng",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{apiUrl}}/messages/user/{{receiverId}}/search?searchText=hello&page=1",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "user", "{{receiverId}}", "search"],
+              "query": [
+                {
+                  "key": "searchText",
+                  "value": "hello"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Gửi tin nhắn văn bản",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"receiverId\": \"{{receiverId}}\",\n    \"content\": {\n        \"text\": \"Xin chào!\"\n    }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{apiUrl}}/messages/user",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "user"]
+            }
+          }
+        },
+        {
+          "name": "Gửi tin nhắn có file",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "receiverId",
+                  "value": "{{receiverId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "content[text]",
+                  "value": "Gửi file đính kèm",
+                  "type": "text"
+                },
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{apiUrl}}/messages/user",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "user"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tin nhắn nhóm",
+      "item": [
+        {
+          "name": "Lấy tin nhắn nhóm",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{apiUrl}}/messages/group/{{groupId}}?page=1",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "group", "{{groupId}}"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tìm kiếm tin nhắn trong nhóm",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{apiUrl}}/messages/group/{{groupId}}/search?searchText=hello&page=1",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "group", "{{groupId}}", "search"],
+              "query": [
+                {
+                  "key": "searchText",
+                  "value": "hello"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Gửi tin nhắn nhóm",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"groupId\": \"{{groupId}}\",\n    \"content\": {\n        \"text\": \"Xin chào nhóm!\"\n    }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{apiUrl}}/messages/group",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "group"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tương tác tin nhắn",
+      "item": [
+        {
+          "name": "Thu hồi tin nhắn",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{apiUrl}}/messages/recall/{{messageId}}",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "recall", "{{messageId}}"]
+            }
+          }
+        },
+        {
+          "name": "Xóa tin nhắn (phía người dùng)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{apiUrl}}/messages/deleted-self-side/{{messageId}}",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "deleted-self-side", "{{messageId}}"]
+            }
+          }
+        },
+        {
+          "name": "Đánh dấu đã đọc",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{apiUrl}}/messages/read/{{messageId}}",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "read", "{{messageId}}"]
+            }
+          }
+        },
+        {
+          "name": "Đánh dấu chưa đọc",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{apiUrl}}/messages/unread/{{messageId}}",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "unread", "{{messageId}}"]
+            }
+          }
+        },
+        {
+          "name": "Thêm phản ứng",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"messageId\": \"{{messageId}}\",\n    \"reaction\": \"👍\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{apiUrl}}/messages/reaction",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "reaction"]
+            }
+          }
+        },
+        {
+          "name": "Xóa phản ứng",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{apiUrl}}/messages/reaction/{{messageId}}",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "reaction", "{{messageId}}"]
+            }
+          }
+        },
+        {
+          "name": "Chuyển tiếp tin nhắn",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"messageId\": \"{{messageId}}\",\n    \"recipients\": [\n        {\n            \"type\": \"USER\",\n            \"id\": \"{{receiverId}}\"\n        }\n    ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{apiUrl}}/messages/forward",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "forward"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tải lên media",
+      "item": [
+        {
+          "name": "Tải lên file media",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "mediaType",
+                  "value": "IMAGE",
+                  "type": "text"
+                },
+                {
+                  "key": "receiverId",
+                  "value": "{{receiverId}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{apiUrl}}/messages/media",
+              "host": ["{{apiUrl}}"],
+              "path": ["messages", "media"]
+            }
+          }
+        }
+      ]
+    }
+  ]
 }
-

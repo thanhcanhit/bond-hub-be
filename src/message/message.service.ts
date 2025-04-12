@@ -998,263 +998,244 @@ export class MessageService {
     page = 1,
     limit = 20,
   ): Promise<ConversationListResponseDto> {
+    console.log('Getting conversation list for user:', userId);
     // Calculate pagination
     const skip = (page - 1) * limit;
 
-    // Get direct conversations (1-on-1 messages)
-    const directConversations = await this.prisma.$queryRaw<any[]>`
-      WITH direct_conversations AS (
-        SELECT
-          CASE
-            WHEN m.sender_id = ${userId}::uuid THEN m.receiver_id
-            ELSE m.sender_id
-          END as conversation_user_id,
-          MAX(m.created_at) as last_message_time
-        FROM messages m
-        WHERE
-          (m.sender_id = ${userId}::uuid OR m.receiver_id = ${userId}::uuid)
-          AND m.message_type = 'USER'
-          AND NOT ${userId}::uuid = ANY(m.deleted_by)
-        GROUP BY conversation_user_id
-      ),
-      last_messages AS (
-        SELECT DISTINCT ON (conversation_id)
-          id,
-          CASE
-            WHEN m.sender_id = ${userId}::uuid THEN m.receiver_id
-            ELSE m.sender_id
-          END as conversation_id,
-          m.content,
-          m.sender_id,
-          m.created_at,
-          m.is_recalled,
-          m.read_by
-        FROM messages m
-        JOIN direct_conversations dc ON
-          (dc.conversation_user_id = m.receiver_id AND m.sender_id = ${userId}::uuid) OR
-          (dc.conversation_user_id = m.sender_id AND m.receiver_id = ${userId}::uuid)
-        WHERE NOT ${userId}::uuid = ANY(m.deleted_by)
-        ORDER BY conversation_id, m.created_at DESC
-      ),
-      unread_counts AS (
-        SELECT
-          CASE
-            WHEN m.sender_id = ${userId}::uuid THEN m.receiver_id
-            ELSE m.sender_id
-          END as conversation_id,
-          COUNT(*) as unread_count
-        FROM messages m
-        WHERE
-          m.receiver_id = ${userId}::uuid AND
-          NOT ${userId}::uuid = ANY(m.read_by) AND
-          NOT ${userId}::uuid = ANY(m.deleted_by)
-        GROUP BY conversation_id
-      )
-      SELECT
-        u.user_id as id,
-        'USER' as type,
-        ui.full_name as "fullName",
-        ui.profile_picture_url as "profilePictureUrl",
-        ui.status_message as "statusMessage",
-        ui.last_seen as "lastSeen",
-        lm.id as "lastMessageId",
-        lm.content as "lastMessageContent",
-        lm.sender_id as "lastMessageSenderId",
-        lm.created_at as "lastMessageCreatedAt",
-        lm.is_recalled as "lastMessageRecalled",
-        CASE WHEN ${userId}::uuid = ANY(lm.read_by) THEN true ELSE false END as "isLastMessageRead",
-        COALESCE(uc.unread_count, 0) as "unreadCount",
-        lm.created_at as "updatedAt"
-      FROM direct_conversations dc
-      JOIN users u ON u.user_id = dc.conversation_user_id
-      LEFT JOIN user_infors ui ON ui.info_id = u.info_id
-      LEFT JOIN last_messages lm ON lm.conversation_id = dc.conversation_user_id
-      LEFT JOIN unread_counts uc ON uc.conversation_id = dc.conversation_user_id
-      ORDER BY lm.created_at DESC
-      LIMIT ${limit} OFFSET ${skip}
-    `;
-
-    // Get group conversations
-    const groupConversations = await this.prisma.$queryRaw<any[]>`
-      WITH user_groups AS (
-        SELECT gm.group_id
-        FROM group_members gm
-        WHERE gm.user_id = ${userId}::uuid
-      ),
-      last_group_messages AS (
-        SELECT DISTINCT ON (m.group_id)
-          m.id,
-          m.group_id,
-          m.content,
-          m.sender_id,
-          m.created_at,
-          m.is_recalled,
-          m.read_by
-        FROM messages m
-        JOIN user_groups ug ON m.group_id = ug.group_id
-        WHERE NOT ${userId}::uuid = ANY(m.deleted_by)
-        ORDER BY m.group_id, m.created_at DESC
-      ),
-      unread_group_counts AS (
-        SELECT
-          m.group_id,
-          COUNT(*) as unread_count
-        FROM messages m
-        JOIN user_groups ug ON m.group_id = ug.group_id
-        WHERE
-          NOT ${userId}::uuid = ANY(m.read_by) AND
-          NOT ${userId}::uuid = ANY(m.deleted_by)
-        GROUP BY m.group_id
-      )
-      SELECT
-        g.group_id as id,
-        'GROUP' as type,
-        g.group_name as name,
-        g.avatar_url as "avatarUrl",
-        lgm.id as "lastMessageId",
-        lgm.content as "lastMessageContent",
-        lgm.sender_id as "lastMessageSenderId",
-        lgm.created_at as "lastMessageCreatedAt",
-        lgm.is_recalled as "lastMessageRecalled",
-        CASE WHEN ${userId}::uuid = ANY(lgm.read_by) THEN true ELSE false END as "isLastMessageRead",
-        COALESCE(ugc.unread_count, 0) as "unreadCount",
-        lgm.created_at as "updatedAt"
-      FROM groups g
-      JOIN user_groups ug ON g.group_id = ug.group_id
-      LEFT JOIN last_group_messages lgm ON lgm.group_id = g.group_id
-      LEFT JOIN unread_group_counts ugc ON ugc.group_id = g.group_id
-      ORDER BY lgm.created_at DESC
-      LIMIT ${limit} OFFSET ${skip}
-    `;
-
-    // Get sender names for last messages
-    const senderIds = [
-      ...directConversations.map((c) => c.lastMessageSenderId),
-      ...groupConversations.map((c) => c.lastMessageSenderId),
-    ].filter((id) => id); // Filter out null/undefined
-
-    const uniqueSenderIds = [...new Set(senderIds)];
-
-    const senders =
-      uniqueSenderIds.length > 0
-        ? await this.prisma.user.findMany({
-            where: { id: { in: uniqueSenderIds } },
-            select: {
-              id: true,
-              userInfo: {
-                select: {
-                  fullName: true,
-                },
-              },
-            },
-          })
-        : [];
-
-    // Create a map of sender IDs to names
-    const senderMap = new Map();
-    senders.forEach((sender) => {
-      senderMap.set(sender.id, sender.userInfo?.fullName || 'Unknown User');
-    });
-
-    // Transform direct conversations to DTO format
-    const directConversationItems = directConversations.map((conv) => {
-      const lastMessage = conv.lastMessageId
-        ? {
-            id: conv.lastMessageId,
-            content: conv.lastMessageContent,
-            senderId: conv.lastMessageSenderId,
-            senderName:
-              senderMap.get(conv.lastMessageSenderId) || 'Unknown User',
-            createdAt: conv.lastMessageCreatedAt,
-            recalled: conv.lastMessageRecalled,
-            isRead: conv.isLastMessageRead,
-          }
-        : undefined;
-
-      return {
-        id: conv.id,
-        type: 'USER',
-        user: {
-          id: conv.id,
-          fullName: conv.fullName,
-          profilePictureUrl: conv.profilePictureUrl,
-          statusMessage: conv.statusMessage,
-          lastSeen: conv.lastSeen,
+    // Lấy danh sách tin nhắn trực tiếp (1-1)
+    console.log('Fetching direct messages for user:', userId);
+    const directMessages = await this.prisma.message.findMany({
+      where: {
+        OR: [{ senderId: userId }, { receiverId: userId }],
+        messageType: 'USER',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        sender: {
+          include: {
+            userInfo: true,
+          },
         },
-        lastMessage,
-        unreadCount: parseInt(conv.unreadCount) || 0,
-        updatedAt: conv.updatedAt,
-      };
-    });
-
-    // Transform group conversations to DTO format
-    const groupConversationItems = groupConversations.map((conv) => {
-      const lastMessage = conv.lastMessageId
-        ? {
-            id: conv.lastMessageId,
-            content: conv.lastMessageContent,
-            senderId: conv.lastMessageSenderId,
-            senderName:
-              senderMap.get(conv.lastMessageSenderId) || 'Unknown User',
-            createdAt: conv.lastMessageCreatedAt,
-            recalled: conv.lastMessageRecalled,
-            isRead: conv.isLastMessageRead,
-          }
-        : undefined;
-
-      return {
-        id: conv.id,
-        type: 'GROUP',
-        group: {
-          id: conv.id,
-          name: conv.name,
-          avatarUrl: conv.avatarUrl,
+        receiver: {
+          include: {
+            userInfo: true,
+          },
         },
-        lastMessage,
-        unreadCount: parseInt(conv.unreadCount) || 0,
-        updatedAt: conv.updatedAt,
-      };
+      },
     });
 
-    // Combine and sort all conversations by last message time (descending)
+    console.log(`Found ${directMessages.length} direct messages`);
+    // In ra chi tiết các tin nhắn để kiểm tra
+    directMessages.forEach((msg, index) => {
+      console.log(`Message ${index + 1}:`, {
+        id: msg.id,
+        senderId: msg.senderId,
+        receiverId: msg.receiverId,
+        content: msg.content,
+        messageType: msg.messageType,
+        deletedBy: msg.deletedBy,
+        readBy: msg.readBy,
+        deletedByType: typeof msg.deletedBy,
+        readByType: typeof msg.readBy,
+        isDeletedByArray: Array.isArray(msg.deletedBy),
+        isReadByArray: Array.isArray(msg.readBy),
+      });
+    });
+
+    // Lấy danh sách nhóm mà người dùng tham gia
+    console.log('Fetching user groups...');
+    const userGroups = await this.prisma.groupMember.findMany({
+      where: {
+        userId,
+      },
+      include: {
+        group: true,
+      },
+    });
+
+    console.log(`Found ${userGroups.length} user groups`);
+
+    // Lấy tin nhắn nhóm
+    console.log('Fetching group messages...');
+    const groupIds = userGroups.map((member) => member.groupId);
+    const groupMessages = await this.prisma.message.findMany({
+      where: {
+        groupId: {
+          in: groupIds,
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        sender: {
+          include: {
+            userInfo: true,
+          },
+        },
+        group: true,
+      },
+    });
+
+    console.log(`Found ${groupMessages.length} group messages`);
+
+    // Tạo danh sách cuộc trò chuyện trực tiếp
+    const directConversationMap = new Map();
+
+    for (const message of directMessages) {
+      // Xác định ID của người đối thoại
+      const partnerId =
+        message.senderId === userId ? message.receiverId : message.senderId;
+
+      console.log('Processing conversation with partner:', partnerId);
+
+      // Nếu chưa có cuộc trò chuyện với người này, tạo mới
+      if (!directConversationMap.has(partnerId)) {
+        // Lấy thông tin người dùng đối thoại
+        const partner = await this.prisma.user.findUnique({
+          where: { id: partnerId },
+          include: { userInfo: true },
+        });
+        const partnerInfo = partner?.userInfo;
+
+        directConversationMap.set(partnerId, {
+          id: partnerId,
+          type: 'USER',
+          user: {
+            id: partnerId,
+            fullName: partnerInfo?.fullName || 'Unknown User',
+            profilePictureUrl: partnerInfo?.profilePictureUrl,
+            statusMessage: partnerInfo?.statusMessage,
+            lastSeen: partnerInfo?.lastSeen,
+          },
+          lastMessage: {
+            id: message.id,
+            content: message.content,
+            senderId: message.senderId,
+            senderName: await this.getSenderName(message.senderId),
+            createdAt: message.createdAt,
+            recalled: message.recalled,
+            isRead:
+              (Array.isArray(message.readBy) &&
+                message.readBy.includes(userId)) ||
+              false,
+          },
+          unreadCount:
+            message.receiverId === userId &&
+            !(Array.isArray(message.readBy) && message.readBy.includes(userId))
+              ? 1
+              : 0,
+          updatedAt: message.createdAt,
+        });
+      }
+    }
+
+    // Tạo danh sách cuộc trò chuyện nhóm
+    const groupConversationMap = new Map();
+
+    for (const message of groupMessages) {
+      if (!message.groupId) continue;
+
+      // Nếu chưa có cuộc trò chuyện với nhóm này, tạo mới
+      if (!groupConversationMap.has(message.groupId)) {
+        // Lấy thông tin nhóm
+        const group = await this.prisma.group.findUnique({
+          where: { id: message.groupId },
+        });
+
+        groupConversationMap.set(message.groupId, {
+          id: message.groupId,
+          type: 'GROUP',
+          group: {
+            id: message.groupId,
+            name: group?.name || 'Unknown Group',
+            avatarUrl: group?.avatarUrl,
+          },
+          lastMessage: {
+            id: message.id,
+            content: message.content,
+            senderId: message.senderId,
+            senderName: await this.getSenderName(message.senderId),
+            createdAt: message.createdAt,
+            recalled: message.recalled,
+            isRead:
+              (Array.isArray(message.readBy) &&
+                message.readBy.includes(userId)) ||
+              false,
+          },
+          unreadCount: !(
+            Array.isArray(message.readBy) && message.readBy.includes(userId)
+          )
+            ? 1
+            : 0,
+          updatedAt: message.createdAt,
+        });
+      }
+    }
+
+    // Kết hợp và sắp xếp tất cả các cuộc trò chuyện theo thời gian tin nhắn cuối cùng
+    const directConversations = Array.from(directConversationMap.values());
+    const groupConversations = Array.from(groupConversationMap.values());
+
+    console.log(`Created ${directConversations.length} direct conversations`);
+    console.log(`Created ${groupConversations.length} group conversations`);
+
+    // In ra chi tiết các cuộc trò chuyện để kiểm tra
+    console.log(
+      'Direct conversation map keys:',
+      Array.from(directConversationMap.keys()),
+    );
+    directConversations.forEach((conv, index) => {
+      console.log(`Direct conversation ${index + 1}:`, {
+        id: conv.id,
+        type: conv.type,
+        user: conv.user,
+        lastMessage: {
+          id: conv.lastMessage?.id,
+          content: conv.lastMessage?.content,
+          senderId: conv.lastMessage?.senderId,
+        },
+      });
+    });
+
     const allConversations = [
-      ...directConversationItems,
-      ...groupConversationItems,
+      ...directConversations,
+      ...groupConversations,
     ].sort((a, b) => {
       const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
       const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
       return dateB - dateA;
     });
 
-    // Get total count of conversations
-    const totalDirectCount = await this.prisma.$queryRaw<[{ count: string }]>`
-      SELECT COUNT(DISTINCT
-        CASE
-          WHEN m.sender_id = ${userId}::uuid THEN m.receiver_id
-          ELSE m.sender_id
-        END
-      ) as count
-      FROM messages m
-      WHERE
-        (m.sender_id = ${userId}::uuid OR m.receiver_id = ${userId}::uuid)
-        AND m.message_type = 'USER'
-        AND NOT ${userId}::uuid = ANY(m.deleted_by)
-    `;
+    // Phân trang
+    const paginatedConversations = allConversations.slice(skip, skip + limit);
 
-    const totalGroupCount = await this.prisma.$queryRaw<[{ count: string }]>`
-      SELECT COUNT(DISTINCT gm.group_id) as count
-      FROM group_members gm
-      WHERE gm.user_id = ${userId}::uuid
-    `;
-
-    const totalCount =
-      parseInt(totalDirectCount[0]?.count || '0') +
-      parseInt(totalGroupCount[0]?.count || '0');
+    console.log(
+      `Returning ${paginatedConversations.length} conversations out of ${allConversations.length} total`,
+    );
 
     return {
-      conversations: allConversations as ConversationItemDto[],
-      totalCount,
+      conversations: paginatedConversations as ConversationItemDto[],
+      totalCount: allConversations.length,
     };
+  }
+
+  /**
+   * Helper method to get user name from user ID
+   * @param userId User ID
+   * @returns User name or 'Unknown User' if not found
+   */
+  private async getSenderName(userId: string): Promise<string> {
+    if (!userId) return 'Unknown User';
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { userInfo: true },
+    });
+
+    return user?.userInfo?.fullName || 'Unknown User';
   }
 
   async forwardMessage(forwardData: ForwardMessageDto, userId: string) {

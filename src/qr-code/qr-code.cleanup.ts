@@ -13,7 +13,7 @@ export class QrCodeCleanupTask {
     private qrCodeGateway: QrCodeGateway,
   ) {}
 
-  @Cron('*/5 * * * *') // Chạy mỗi 5 phút
+  @Cron('*/30 * * * *') // Chạy mỗi 30 phút
   async handleCron() {
     const now = new Date();
 

@@ -36,6 +36,7 @@ export class MessageController {
     @Query('limit') limit = 20,
   ) {
     const requestUserId = req['user'].sub;
+    console.log('Getting conversation list for user:', requestUserId);
     return this.messageService.getConversationList(requestUserId, page, limit);
   }
 
