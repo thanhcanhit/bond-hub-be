@@ -256,6 +256,10 @@ model Message {
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
   messageType MessageType? @default(USER)
+  // Thêm các trường mới
+  forwardedFrom String?    @map("forwarded_from") @db.Uuid
+  forwardedMessage Message? @relation("ForwardedMessages", fields: [forwardedFrom], references: [id])
+  forwards Message[] @relation("ForwardedMessages")
 
   @@map("messages")
 }
@@ -322,3 +326,4 @@ enum ReactionType {
   SAD
   ANGRY
 }
+

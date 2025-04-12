@@ -22,6 +22,11 @@ import {
 } from './dtos/message-media.dto';
 import { StorageService } from 'src/storage/storage.service';
 import { v4 as uuidv4 } from 'uuid';
+import { ForwardMessageDto } from './dtos/forward-message.dto';
+import {
+  ConversationItemDto,
+  ConversationListResponseDto,
+} from './dtos/conversation-list.dto';
 
 const PAGE_SIZE = 30;
 
@@ -979,5 +984,345 @@ export class MessageService {
     } else {
       return MediaType.OTHER;
     }
+  }
+
+  /**
+   * Get conversation list for a user
+   * @param userId User ID
+   * @param page Page number (optional, default: 1)
+   * @param limit Number of conversations per page (optional, default: 20)
+   * @returns List of conversations with last messages
+   */
+  async getConversationList(
+    userId: string,
+    page = 1,
+    limit = 20,
+  ): Promise<ConversationListResponseDto> {
+    console.log('Getting conversation list for user:', userId);
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+
+    // Lấy danh sách tin nhắn trực tiếp (1-1)
+    console.log('Fetching direct messages for user:', userId);
+    const directMessages = await this.prisma.message.findMany({
+      where: {
+        OR: [{ senderId: userId }, { receiverId: userId }],
+        messageType: 'USER',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        sender: {
+          include: {
+            userInfo: true,
+          },
+        },
+        receiver: {
+          include: {
+            userInfo: true,
+          },
+        },
+      },
+    });
+
+    console.log(`Found ${directMessages.length} direct messages`);
+    // In ra chi tiết các tin nhắn để kiểm tra
+    directMessages.forEach((msg, index) => {
+      console.log(`Message ${index + 1}:`, {
+        id: msg.id,
+        senderId: msg.senderId,
+        receiverId: msg.receiverId,
+        content: msg.content,
+        messageType: msg.messageType,
+        deletedBy: msg.deletedBy,
+        readBy: msg.readBy,
+        deletedByType: typeof msg.deletedBy,
+        readByType: typeof msg.readBy,
+        isDeletedByArray: Array.isArray(msg.deletedBy),
+        isReadByArray: Array.isArray(msg.readBy),
+      });
+    });
+
+    // Lấy danh sách nhóm mà người dùng tham gia
+    console.log('Fetching user groups...');
+    const userGroups = await this.prisma.groupMember.findMany({
+      where: {
+        userId,
+      },
+      include: {
+        group: true,
+      },
+    });
+
+    console.log(`Found ${userGroups.length} user groups`);
+
+    // Lấy tin nhắn nhóm
+    console.log('Fetching group messages...');
+    const groupIds = userGroups.map((member) => member.groupId);
+    const groupMessages = await this.prisma.message.findMany({
+      where: {
+        groupId: {
+          in: groupIds,
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        sender: {
+          include: {
+            userInfo: true,
+          },
+        },
+        group: true,
+      },
+    });
+
+    console.log(`Found ${groupMessages.length} group messages`);
+
+    // Tạo danh sách cuộc trò chuyện trực tiếp
+    const directConversationMap = new Map();
+
+    for (const message of directMessages) {
+      // Xác định ID của người đối thoại
+      const partnerId =
+        message.senderId === userId ? message.receiverId : message.senderId;
+
+      console.log('Processing conversation with partner:', partnerId);
+
+      // Nếu chưa có cuộc trò chuyện với người này, tạo mới
+      if (!directConversationMap.has(partnerId)) {
+        // Lấy thông tin người dùng đối thoại
+        const partner = await this.prisma.user.findUnique({
+          where: { id: partnerId },
+          include: { userInfo: true },
+        });
+        const partnerInfo = partner?.userInfo;
+
+        directConversationMap.set(partnerId, {
+          id: partnerId,
+          type: 'USER',
+          user: {
+            id: partnerId,
+            fullName: partnerInfo?.fullName || 'Unknown User',
+            profilePictureUrl: partnerInfo?.profilePictureUrl,
+            statusMessage: partnerInfo?.statusMessage,
+            lastSeen: partnerInfo?.lastSeen,
+          },
+          lastMessage: {
+            id: message.id,
+            content: message.content,
+            senderId: message.senderId,
+            senderName: await this.getSenderName(message.senderId),
+            createdAt: message.createdAt,
+            recalled: message.recalled,
+            isRead:
+              (Array.isArray(message.readBy) &&
+                message.readBy.includes(userId)) ||
+              false,
+          },
+          unreadCount:
+            message.receiverId === userId &&
+            !(Array.isArray(message.readBy) && message.readBy.includes(userId))
+              ? 1
+              : 0,
+          updatedAt: message.createdAt,
+        });
+      }
+    }
+
+    // Tạo danh sách cuộc trò chuyện nhóm
+    const groupConversationMap = new Map();
+
+    for (const message of groupMessages) {
+      if (!message.groupId) continue;
+
+      // Nếu chưa có cuộc trò chuyện với nhóm này, tạo mới
+      if (!groupConversationMap.has(message.groupId)) {
+        // Lấy thông tin nhóm
+        const group = await this.prisma.group.findUnique({
+          where: { id: message.groupId },
+        });
+
+        groupConversationMap.set(message.groupId, {
+          id: message.groupId,
+          type: 'GROUP',
+          group: {
+            id: message.groupId,
+            name: group?.name || 'Unknown Group',
+            avatarUrl: group?.avatarUrl,
+          },
+          lastMessage: {
+            id: message.id,
+            content: message.content,
+            senderId: message.senderId,
+            senderName: await this.getSenderName(message.senderId),
+            createdAt: message.createdAt,
+            recalled: message.recalled,
+            isRead:
+              (Array.isArray(message.readBy) &&
+                message.readBy.includes(userId)) ||
+              false,
+          },
+          unreadCount: !(
+            Array.isArray(message.readBy) && message.readBy.includes(userId)
+          )
+            ? 1
+            : 0,
+          updatedAt: message.createdAt,
+        });
+      }
+    }
+
+    // Kết hợp và sắp xếp tất cả các cuộc trò chuyện theo thời gian tin nhắn cuối cùng
+    const directConversations = Array.from(directConversationMap.values());
+    const groupConversations = Array.from(groupConversationMap.values());
+
+    console.log(`Created ${directConversations.length} direct conversations`);
+    console.log(`Created ${groupConversations.length} group conversations`);
+
+    // In ra chi tiết các cuộc trò chuyện để kiểm tra
+    console.log(
+      'Direct conversation map keys:',
+      Array.from(directConversationMap.keys()),
+    );
+    directConversations.forEach((conv, index) => {
+      console.log(`Direct conversation ${index + 1}:`, {
+        id: conv.id,
+        type: conv.type,
+        user: conv.user,
+        lastMessage: {
+          id: conv.lastMessage?.id,
+          content: conv.lastMessage?.content,
+          senderId: conv.lastMessage?.senderId,
+        },
+      });
+    });
+
+    const allConversations = [
+      ...directConversations,
+      ...groupConversations,
+    ].sort((a, b) => {
+      const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    // Phân trang
+    const paginatedConversations = allConversations.slice(skip, skip + limit);
+
+    console.log(
+      `Returning ${paginatedConversations.length} conversations out of ${allConversations.length} total`,
+    );
+
+    return {
+      conversations: paginatedConversations as ConversationItemDto[],
+      totalCount: allConversations.length,
+    };
+  }
+
+  /**
+   * Helper method to get user name from user ID
+   * @param userId User ID
+   * @returns User name or 'Unknown User' if not found
+   */
+  private async getSenderName(userId: string): Promise<string> {
+    if (!userId) return 'Unknown User';
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { userInfo: true },
+    });
+
+    return user?.userInfo?.fullName || 'Unknown User';
+  }
+
+  async forwardMessage(forwardData: ForwardMessageDto, userId: string) {
+    // Get the original message
+    const originalMessage = await this.prisma.message.findUnique({
+      where: { id: forwardData.messageId },
+    });
+
+    if (!originalMessage) {
+      throw new NotFoundException('Original message not found');
+    }
+
+    const results = [];
+
+    // Process each target
+    for (const target of forwardData.targets) {
+      try {
+        let newMessage: PrismaMessage;
+
+        if (target.userId) {
+          // Prevent self-forwarding
+          if (target.userId === userId) {
+            continue;
+          }
+
+          // Forward as user message
+          newMessage = await this.prisma.message.create({
+            data: {
+              senderId: userId,
+              receiverId: target.userId,
+              content: originalMessage.content,
+              messageType: 'USER',
+              forwardedFrom: originalMessage.id,
+            },
+          });
+
+          results.push({
+            type: 'user',
+            message: newMessage,
+            success: true,
+          });
+        } else if (target.groupId) {
+          // Check if user is member of the group
+          const isMember = await this.prisma.groupMember.findFirst({
+            where: {
+              groupId: target.groupId,
+              userId,
+            },
+          });
+
+          if (!isMember) {
+            results.push({
+              type: 'group',
+              groupId: target.groupId,
+              success: false,
+              error: 'Not a member of the group',
+            });
+            continue;
+          }
+
+          // Forward as group message
+          newMessage = await this.prisma.message.create({
+            data: {
+              senderId: userId,
+              groupId: target.groupId,
+              content: originalMessage.content,
+              messageType: 'GROUP',
+              forwardedFrom: originalMessage.id,
+            },
+          });
+
+          results.push({
+            type: 'group',
+            message: newMessage,
+            success: true,
+          });
+        }
+      } catch (error) {
+        results.push({
+          type: target.userId ? 'user' : 'group',
+          targetId: target.userId || target.groupId,
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+
+    return results;
   }
 }
