@@ -410,6 +410,77 @@ async function createFriendships(users: any[]) {
       status: FriendStatus.ACCEPTED,
       introduce: 'Kết bạn nhé!',
     },
+
+    // Mối quan hệ cho 5 người dùng mới
+    // User 10 (Vũ Thị F)
+    {
+      senderId: users[9].id, // Vũ Thị F
+      receiverId: users[0].id, // Lê Hoàng Khang
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Mình là bạn học cấp 3',
+    },
+    {
+      senderId: users[9].id,
+      receiverId: users[2].id, // Hồ Thị Như Tâm
+      status: FriendStatus.PENDING,
+      introduce: 'Mình là bạn của Hoàng Khang',
+    },
+
+    // User 11 (Đỗ Văn G)
+    {
+      senderId: users[10].id, // Đỗ Văn G
+      receiverId: users[1].id, // Nguyễn Thanh Cảnh
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Mình là bạn cùng lớp',
+    },
+    {
+      senderId: users[10].id,
+      receiverId: users[4].id, // Nguyễn Văn A
+      status: FriendStatus.PENDING,
+      introduce: 'Kết bạn nhé!',
+    },
+
+    // User 12 (Ngô Thị H)
+    {
+      senderId: users[11].id, // Ngô Thị H
+      receiverId: users[3].id, // Trần Đình Kiên
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Mình là bạn cùng khóa',
+    },
+    {
+      senderId: users[5].id, // Trần Thị B
+      receiverId: users[11].id,
+      status: FriendStatus.PENDING,
+      introduce: 'Kết bạn nhé!',
+    },
+
+    // User 13 (Lý Văn I)
+    {
+      senderId: users[12].id, // Lý Văn I
+      receiverId: users[0].id, // Lê Hoàng Khang
+      status: FriendStatus.PENDING,
+      introduce: 'Mình là bạn của Kiên',
+    },
+    {
+      senderId: users[12].id,
+      receiverId: users[10].id, // Đỗ Văn G
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Kết bạn nhé!',
+    },
+
+    // User 14 (Trịnh Thị K)
+    {
+      senderId: users[13].id, // Trịnh Thị K
+      receiverId: users[2].id, // Hồ Thị Như Tâm
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Mình là bạn cùng lớp',
+    },
+    {
+      senderId: users[13].id,
+      receiverId: users[9].id, // Vũ Thị F
+      status: FriendStatus.BLOCKED,
+      introduce: 'Kết bạn nhé!',
+    },
   ];
 
   for (const friendship of friendships) {
