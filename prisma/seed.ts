@@ -414,41 +414,41 @@ async function createFriendships(users: any[]) {
     // Mối quan hệ cho 5 người dùng mới
     // User 10 (Vũ Thị F)
     {
-      senderId: users[9].id, // Vũ Thị F
-      receiverId: users[0].id, // Lê Hoàng Khang
+      senderId: users[9].id,
+      receiverId: users[0].id,
       status: FriendStatus.ACCEPTED,
       introduce: 'Mình là bạn học cấp 3',
     },
     {
       senderId: users[9].id,
-      receiverId: users[2].id, // Hồ Thị Như Tâm
+      receiverId: users[2].id,
       status: FriendStatus.PENDING,
       introduce: 'Mình là bạn của Hoàng Khang',
     },
 
     // User 11 (Đỗ Văn G)
     {
-      senderId: users[10].id, // Đỗ Văn G
-      receiverId: users[1].id, // Nguyễn Thanh Cảnh
+      senderId: users[10].id,
+      receiverId: users[1].id,
       status: FriendStatus.ACCEPTED,
       introduce: 'Mình là bạn cùng lớp',
     },
     {
       senderId: users[10].id,
-      receiverId: users[4].id, // Nguyễn Văn A
+      receiverId: users[4].id,
       status: FriendStatus.PENDING,
       introduce: 'Kết bạn nhé!',
     },
 
     // User 12 (Ngô Thị H)
     {
-      senderId: users[11].id, // Ngô Thị H
-      receiverId: users[3].id, // Trần Đình Kiên
+      senderId: users[11].id,
+      receiverId: users[3].id,
       status: FriendStatus.ACCEPTED,
       introduce: 'Mình là bạn cùng khóa',
     },
     {
-      senderId: users[5].id, // Trần Thị B
+      senderId: users[5].id,
       receiverId: users[11].id,
       status: FriendStatus.PENDING,
       introduce: 'Kết bạn nhé!',
@@ -456,28 +456,28 @@ async function createFriendships(users: any[]) {
 
     // User 13 (Lý Văn I)
     {
-      senderId: users[12].id, // Lý Văn I
-      receiverId: users[0].id, // Lê Hoàng Khang
+      senderId: users[12].id,
+      receiverId: users[0].id,
       status: FriendStatus.PENDING,
       introduce: 'Mình là bạn của Kiên',
     },
     {
       senderId: users[12].id,
-      receiverId: users[10].id, // Đỗ Văn G
+      receiverId: users[10].id,
       status: FriendStatus.ACCEPTED,
       introduce: 'Kết bạn nhé!',
     },
 
     // User 14 (Trịnh Thị K)
     {
-      senderId: users[13].id, // Trịnh Thị K
-      receiverId: users[2].id, // Hồ Thị Như Tâm
+      senderId: users[13].id,
+      receiverId: users[2].id,
       status: FriendStatus.ACCEPTED,
       introduce: 'Mình là bạn cùng lớp',
     },
     {
       senderId: users[13].id,
-      receiverId: users[9].id, // Vũ Thị F
+      receiverId: users[9].id,
       status: FriendStatus.BLOCKED,
       introduce: 'Kết bạn nhé!',
     },
@@ -512,6 +512,32 @@ async function createUserSettings(users: any[]) {
     {
       userId: users[3].id,
       notificationEnabled: true,
+      darkMode: true,
+    },
+    // Cài đặt cho 5 người dùng mới
+    {
+      userId: users[9].id, // Vũ Thị F
+      notificationEnabled: true,
+      darkMode: false,
+    },
+    {
+      userId: users[10].id, // Đỗ Văn G
+      notificationEnabled: true,
+      darkMode: true,
+    },
+    {
+      userId: users[11].id, // Ngô Thị H
+      notificationEnabled: false,
+      darkMode: false,
+    },
+    {
+      userId: users[12].id, // Lý Văn I
+      notificationEnabled: true,
+      darkMode: true,
+    },
+    {
+      userId: users[13].id, // Trịnh Thị K
+      notificationEnabled: false,
       darkMode: true,
     },
   ];
