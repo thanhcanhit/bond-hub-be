@@ -106,6 +106,147 @@ async function createUsers() {
         'https://vcnmqyobtaqxbnckzcnr.supabase.co/storage/v1/object/public/backgrounds/1cc1b368-02e1-44a7-87c1-17ab9620bb5f/83add9d5-7acd-46f2-a385-28350727bcda.jpeg',
       password: 'trandinhkien',
     },
+    {
+      id: '300bc485-d342-442e-aa08-95b754ba901d',
+      email: 'user5@example.com',
+      phoneNumber: '0987654321',
+      fullName: 'Nguyễn Văn A',
+      dateOfBirth: new Date('2000-01-15'),
+      gender: Gender.MALE,
+      bio: 'Yêu màu tím, thích màu hồng 💜💗',
+      profilePictureUrl:
+        'https://vcnmqyobtaqxbnckzcnr.supabase.co/storage/v1/object/public/avatars/300bc485-d342-442e-aa08-95b754ba901d/6f654676-36f9-4a20-a11a-259613855b19.png',
+      statusMessage: 'Living my best life ✨',
+      coverImgUrl:
+        'https://vcnmqyobtaqxbnckzcnr.supabase.co/storage/v1/object/public/backgrounds/300bc485-d342-442e-aa08-95b754ba901d/a7d999cf-7454-42be-927b-5271b7f306e9.jpg',
+      password: 'sapassword',
+    },
+    {
+      id: '3d09a459-8398-4ec8-ba0f-ffb881f77632',
+      email: 'user6@example.com',
+      phoneNumber: '0912345678',
+      fullName: 'Trần Thị B',
+      dateOfBirth: new Date('2001-06-20'),
+      gender: Gender.FEMALE,
+      bio: 'Coffee addict ☕ | Book lover 📚',
+      profilePictureUrl:
+        'https://vcnmqyobtaqxbnckzcnr.supabase.co/storage/v1/object/public/avatars/3d09a459-8398-4ec8-ba0f-ffb881f77632/2f53a027-8ab3-45d1-ab53-2632cff110f2.jpg',
+      statusMessage: 'One day at a time 🌟',
+      coverImgUrl:
+        'https://vcnmqyobtaqxbnckzcnr.supabase.co/storage/v1/object/public/backgrounds/3d09a459-8398-4ec8-ba0f-ffb881f77632/7da60c77-54d1-4eb2-8116-ccf88dc6eeb4.jpg',
+      password: 'sapassword',
+    },
+    {
+      id: '422a4298-58d6-41d9-a28e-4025c19baf3a',
+      email: 'user7@example.com',
+      phoneNumber: '0923456789',
+      fullName: 'Phạm Văn C',
+      dateOfBirth: new Date('1999-12-25'),
+      gender: Gender.MALE,
+      bio: 'Photographer 📸 | Travel enthusiast 🌎',
+      profilePictureUrl:
+        'https://vcnmqyobtaqxbnckzcnr.supabase.co/storage/v1/object/public/avatars/422a4298-58d6-41d9-a28e-4025c19baf3a/4f4f6af1-89b1-4e92-8bcd-fee4e6fc2926.jpg',
+      statusMessage: 'Capturing moments ✨',
+      coverImgUrl:
+        'https://vcnmqyobtaqxbnckzcnr.supabase.co/storage/v1/object/public/backgrounds/300bc485-d342-442e-aa08-95b754ba901d/a7d999cf-7454-42be-927b-5271b7f306e9.jpg',
+      password: 'sapassword',
+    },
+    {
+      id: '84cc97a1-be78-4ae9-975b-efe8328fe015',
+      email: 'user8@example.com',
+      phoneNumber: '0934567890',
+      fullName: 'Lê Thị D',
+      dateOfBirth: new Date('2002-08-30'),
+      gender: Gender.FEMALE,
+      bio: 'Music lover 🎵 | Foodie 🍜',
+      profilePictureUrl:
+        'https://vcnmqyobtaqxbnckzcnr.supabase.co/storage/v1/object/public/avatars/84cc97a1-be78-4ae9-975b-efe8328fe015/1c924b7e-1cab-4a32-9d3b-cce48c8c6264.png',
+      statusMessage: 'Dancing through life 💃',
+      coverImgUrl:
+        'https://vcnmqyobtaqxbnckzcnr.supabase.co/storage/v1/object/public/backgrounds/84cc97a1-be78-4ae9-975b-efe8328fe015/5b57fc8f-cb4b-4d98-b72a-ab68022d7e66.png',
+      password: 'sapassword',
+    },
+    {
+      id: 'ac3fe11d-01bf-4ef0-9992-661e621253c2',
+      email: 'user9@example.com',
+      phoneNumber: '0945678901',
+      fullName: 'Hoàng Văn E',
+      dateOfBirth: new Date('1998-04-10'),
+      gender: Gender.MALE,
+      bio: 'Gamer 🎮 | Tech enthusiast 💻',
+      profilePictureUrl:
+        'https://vcnmqyobtaqxbnckzcnr.supabase.co/storage/v1/object/public/backgrounds/ac3fe11d-01bf-4ef0-9992-661e621253c2/7c188dd9-2e48-487c-b191-5491aae6a749.png',
+      statusMessage: 'Game on! 🎯',
+      coverImgUrl:
+        'https://vcnmqyobtaqxbnckzcnr.supabase.co/storage/v1/object/public/backgrounds/300bc485-d342-442e-aa08-95b754ba901d/a7d999cf-7454-42be-927b-5271b7f306e9.jpg',
+      password: 'sapassword',
+    },
+    // 5 người dùng mới với ID cố định, không có ảnh đại diện và ảnh bìa
+    {
+      id: 'b5c8d7e6-f5e4-4d3c-b2a1-0f9e8d7c6b5a',
+      email: 'user10@example.com',
+      phoneNumber: '0956789012',
+      fullName: 'Vũ Thị F',
+      dateOfBirth: new Date('1997-07-22'),
+      gender: Gender.FEMALE,
+      bio: 'Designer 🎨 | Creative mind 💭',
+      profilePictureUrl: null,
+      statusMessage: 'Creating beautiful things ✨',
+      coverImgUrl: null,
+      password: 'sapassword',
+    },
+    {
+      id: 'c6d7e8f9-a0b1-2c3d-4e5f-6a7b8c9d0e1f',
+      email: 'user11@example.com',
+      phoneNumber: '0967890123',
+      fullName: 'Đỗ Văn G',
+      dateOfBirth: new Date('1996-09-18'),
+      gender: Gender.MALE,
+      bio: 'Sports enthusiast 🏀 | Fitness lover 💪',
+      profilePictureUrl: null,
+      statusMessage: 'No pain, no gain 🔥',
+      coverImgUrl: null,
+      password: 'sapassword',
+    },
+    {
+      id: 'd7e8f9a0-b1c2-3d4e-5f6a-7b8c9d0e1f2a',
+      email: 'user12@example.com',
+      phoneNumber: '0978901234',
+      fullName: 'Ngô Thị H',
+      dateOfBirth: new Date('1995-11-30'),
+      gender: Gender.FEMALE,
+      bio: 'Chef 👩‍🍳 | Food blogger 🍕',
+      profilePictureUrl: null,
+      statusMessage: 'Cooking up a storm 🌪️',
+      coverImgUrl: null,
+      password: 'sapassword',
+    },
+    {
+      id: 'e8f9a0b1-c2d3-4e5f-6a7b-8c9d0e1f2a3b',
+      email: 'user13@example.com',
+      phoneNumber: '0989012345',
+      fullName: 'Lý Văn I',
+      dateOfBirth: new Date('1994-02-14'),
+      gender: Gender.MALE,
+      bio: 'Writer ✍️ | Poet 📝',
+      profilePictureUrl: null,
+      statusMessage: 'Words have power 📚',
+      coverImgUrl: null,
+      password: 'sapassword',
+    },
+    {
+      id: 'f9a0b1c2-d3e4-5f6a-7b8c-9d0e1f2a3b4c',
+      email: 'user14@example.com',
+      phoneNumber: '0990123456',
+      fullName: 'Trịnh Thị K',
+      dateOfBirth: new Date('1993-05-25'),
+      gender: Gender.FEMALE,
+      bio: 'Teacher 👩‍🏫 | Lifelong learner 🧠',
+      profilePictureUrl: null,
+      statusMessage: 'Knowledge is power 🔍',
+      coverImgUrl: null,
+      password: 'sapassword',
+    },
   ];
 
   const createdUsers = [];
@@ -153,10 +294,9 @@ async function createUsers() {
 }
 
 async function createFriendships(users: any[]) {
-  // Friend relationships already deleted in createUsers function
-
-  // Các tình huống bạn bè khác nhau - adjusted for 4 users
+  // Giữ nguyên các mối quan hệ cũ
   const friendships = [
+    // Các mối quan hệ cũ
     {
       senderId: users[0].id,
       receiverId: users[1].id,
@@ -195,9 +335,151 @@ async function createFriendships(users: any[]) {
     {
       senderId: users[1].id,
       receiverId: users[2].id,
-      status: FriendStatus.BLOCKED,
+      status: FriendStatus.ACCEPTED,
       introduce:
         'Tôi biết bạn thông qua số điện thoại, hãy kết bạn với tôi nhé!.',
+    },
+
+    // Thêm các mối quan hệ mới
+    // User 5 (Nguyễn Văn A)
+    {
+      senderId: users[4].id, // Nguyễn Văn A
+      receiverId: users[0].id,
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Kết bạn nhé!',
+    },
+    {
+      senderId: users[4].id,
+      receiverId: users[1].id,
+      status: FriendStatus.PENDING,
+      introduce: 'Mình là bạn của Hoàng Khang',
+    },
+
+    // User 6 (Trần Thị B)
+    {
+      senderId: users[5].id,
+      receiverId: users[2].id,
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Mình là bạn cùng lớp với Như Tâm',
+    },
+    {
+      senderId: users[3].id,
+      receiverId: users[5].id,
+      status: FriendStatus.BLOCKED,
+      introduce: 'Kết bạn nhé!',
+    },
+
+    // User 7 (Phạm Văn C)
+    {
+      senderId: users[6].id,
+      receiverId: users[0].id,
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Mình là bạn cùng khoa',
+    },
+    {
+      senderId: users[6].id,
+      receiverId: users[4].id,
+      status: FriendStatus.PENDING,
+      introduce: 'Kết bạn nhé!',
+    },
+
+    // User 8 (Lê Thị D)
+    {
+      senderId: users[7].id,
+      receiverId: users[1].id,
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Mình là bạn cùng câu lạc bộ',
+    },
+    {
+      senderId: users[5].id,
+      receiverId: users[7].id,
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Kết bạn nhé!',
+    },
+
+    // User 9 (Hoàng Văn E)
+    {
+      senderId: users[8].id,
+      receiverId: users[2].id,
+      status: FriendStatus.PENDING,
+      introduce: 'Mình là bạn của Kiên',
+    },
+    {
+      senderId: users[8].id,
+      receiverId: users[6].id,
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Kết bạn nhé!',
+    },
+
+    // Mối quan hệ cho 5 người dùng mới
+    // User 10 (Vũ Thị F)
+    {
+      senderId: users[9].id,
+      receiverId: users[0].id,
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Mình là bạn học cấp 3',
+    },
+    {
+      senderId: users[9].id,
+      receiverId: users[2].id,
+      status: FriendStatus.PENDING,
+      introduce: 'Mình là bạn của Hoàng Khang',
+    },
+
+    // User 11 (Đỗ Văn G)
+    {
+      senderId: users[10].id,
+      receiverId: users[1].id,
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Mình là bạn cùng lớp',
+    },
+    {
+      senderId: users[10].id,
+      receiverId: users[4].id,
+      status: FriendStatus.PENDING,
+      introduce: 'Kết bạn nhé!',
+    },
+
+    // User 12 (Ngô Thị H)
+    {
+      senderId: users[11].id,
+      receiverId: users[3].id,
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Mình là bạn cùng khóa',
+    },
+    {
+      senderId: users[5].id,
+      receiverId: users[11].id,
+      status: FriendStatus.PENDING,
+      introduce: 'Kết bạn nhé!',
+    },
+
+    // User 13 (Lý Văn I)
+    {
+      senderId: users[12].id,
+      receiverId: users[0].id,
+      status: FriendStatus.PENDING,
+      introduce: 'Mình là bạn của Kiên',
+    },
+    {
+      senderId: users[12].id,
+      receiverId: users[10].id,
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Kết bạn nhé!',
+    },
+
+    // User 14 (Trịnh Thị K)
+    {
+      senderId: users[13].id,
+      receiverId: users[2].id,
+      status: FriendStatus.ACCEPTED,
+      introduce: 'Mình là bạn cùng lớp',
+    },
+    {
+      senderId: users[13].id,
+      receiverId: users[9].id,
+      status: FriendStatus.BLOCKED,
+      introduce: 'Kết bạn nhé!',
     },
   ];
 
@@ -230,6 +512,32 @@ async function createUserSettings(users: any[]) {
     {
       userId: users[3].id,
       notificationEnabled: true,
+      darkMode: true,
+    },
+    // Cài đặt cho 5 người dùng mới
+    {
+      userId: users[9].id, // Vũ Thị F
+      notificationEnabled: true,
+      darkMode: false,
+    },
+    {
+      userId: users[10].id, // Đỗ Văn G
+      notificationEnabled: true,
+      darkMode: true,
+    },
+    {
+      userId: users[11].id, // Ngô Thị H
+      notificationEnabled: false,
+      darkMode: false,
+    },
+    {
+      userId: users[12].id, // Lý Văn I
+      notificationEnabled: true,
+      darkMode: true,
+    },
+    {
+      userId: users[13].id, // Trịnh Thị K
+      notificationEnabled: false,
       darkMode: true,
     },
   ];
