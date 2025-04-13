@@ -9,13 +9,30 @@ import {
   OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from '../prisma/prisma.service';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
+
 import { MessageService } from './message.service';
-import { UserMessageDto } from './dtos/user-message.dto';
-import { GroupMessageDto } from './dtos/group-message.dto';
-import { CreateReactionDto } from './dtos/create-reaction.dto';
+
+// Interface cho tin nhắn với các trường cần thiết
+type MessageData = {
+  id: string;
+  senderId: string;
+  receiverId?: string;
+  groupId?: string;
+  content: any;
+  messageType?: 'USER' | 'GROUP';
+  reactions?: any[];
+  readBy?: string[];
+  createdAt?: Date;
+  updatedAt?: Date;
+  [key: string]: any; // Cho phép các trường khác
+};
 
 @Injectable()
 @WebSocketGateway({
@@ -43,9 +60,8 @@ export class MessageGateway
   private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor(
-    private readonly jwtService: JwtService,
-    private readonly prisma: PrismaService,
-    private readonly messageService: MessageService,
+    @Inject(forwardRef(() => MessageService))
+    private readonly messageService?: MessageService,
   ) {}
 
   private async getUserFromSocket(client: Socket): Promise<string> {
@@ -117,14 +133,12 @@ export class MessageGateway
     client.join(`user:${userId}`);
 
     // Join all group rooms the user is a member of
-    const userGroups = await this.prisma.groupMember.findMany({
-      where: { userId },
-      select: { groupId: true },
-    });
-
-    userGroups.forEach((group) => {
-      client.join(`group:${group.groupId}`);
-    });
+    if (this.messageService) {
+      const userGroups = await this.messageService.getUserGroups(userId);
+      userGroups.forEach((groupId) => {
+        client.join(`group:${groupId}`);
+      });
+    }
 
     // Emit user online status
     this.server.emit('userStatus', {
@@ -187,274 +201,140 @@ export class MessageGateway
     return { status: 'ok', timestamp: Date.now() };
   }
 
-  @SubscribeMessage('sendUserMessage')
-  async handleUserMessage(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() message: UserMessageDto,
-  ) {
-    const userId = await this.getUserFromSocket(client);
+  /**
+   * Phát sự kiện tin nhắn mới đến người dùng
+   * @param message Tin nhắn đã được lưu vào database
+   */
+  notifyNewUserMessage(message: MessageData) {
+    const eventData = {
+      type: 'user',
+      message,
+      timestamp: new Date(),
+    };
 
-    try {
-      // Update last activity
-      this.lastActivity.set(client.id, Date.now());
-      const savedMessage = await this.messageService.createUserMessage(
-        message,
-        userId,
-      );
+    // Phát sự kiện đến người gửi
+    this.server.to(`user:${message.senderId}`).emit('newMessage', eventData);
 
-      // Emit to sender's room
-      this.server.to(`user:${userId}`).emit('newMessage', {
-        type: 'user',
-        message: savedMessage,
-        timestamp: new Date(),
-      });
+    // Phát sự kiện đến người nhận
+    if (message.receiverId) {
+      this.server
+        .to(`user:${message.receiverId}`)
+        .emit('newMessage', eventData);
 
-      // Emit to receiver's room
-      this.server.to(`user:${message.receiverId}`).emit('newMessage', {
-        type: 'user',
-        message: savedMessage,
-        timestamp: new Date(),
-      });
-
-      // Emit typing stopped
+      // Phát sự kiện dừng nhập
       this.server.to(`user:${message.receiverId}`).emit('userTypingStopped', {
-        userId,
+        userId: message.senderId,
         timestamp: new Date(),
       });
-
-      return savedMessage;
-    } catch (error) {
-      client.emit('error', { message: error.message });
     }
   }
 
-  @SubscribeMessage('sendGroupMessage')
-  async handleGroupMessage(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() message: GroupMessageDto,
-  ) {
-    const userId = await this.getUserFromSocket(client);
+  /**
+   * Phát sự kiện tin nhắn mới đến nhóm
+   * @param message Tin nhắn đã được lưu vào database
+   */
+  notifyNewGroupMessage(message: MessageData) {
+    const eventData = {
+      type: 'group',
+      message,
+      timestamp: new Date(),
+    };
 
-    try {
-      // Update last activity
-      this.lastActivity.set(client.id, Date.now());
-      const savedMessage = await this.messageService.createGroupMessage(
-        message,
-        userId,
-      );
+    // Phát sự kiện đến phòng nhóm
+    if (message.groupId) {
+      this.server.to(`group:${message.groupId}`).emit('newMessage', eventData);
 
-      // Emit to the group room
-      this.server.to(`group:${message.groupId}`).emit('newMessage', {
-        type: 'group',
-        message: savedMessage,
-        timestamp: new Date(),
-      });
-
-      // Emit typing stopped
+      // Phát sự kiện dừng nhập
       this.server.to(`group:${message.groupId}`).emit('userTypingStopped', {
-        userId,
+        userId: message.senderId,
         groupId: message.groupId,
         timestamp: new Date(),
       });
-
-      return savedMessage;
-    } catch (error) {
-      client.emit('error', { message: error.message });
     }
   }
 
-  @SubscribeMessage('readMessage')
-  async handleReadMessage(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { messageId: string },
-  ) {
-    const userId = await this.getUserFromSocket(client);
+  /**
+   * Phát sự kiện đã đọc tin nhắn
+   * @param message Tin nhắn đã được cập nhật trạng thái đọc
+   * @param userId ID của người đọc
+   */
+  notifyMessageRead(message: MessageData, userId: string) {
+    const readEvent = {
+      messageId: message.id,
+      readBy: message.readBy,
+      userId,
+      timestamp: new Date(),
+    };
 
-    try {
-      // Update last activity
-      this.lastActivity.set(client.id, Date.now());
-      const updatedMessage = await this.messageService.readMessage(
-        data.messageId,
-        userId,
-      );
-
-      const readEvent = {
-        messageId: updatedMessage.id,
-        readBy: updatedMessage.readBy,
-        userId,
-        timestamp: new Date(),
-      };
-
-      // For user messages
-      if (updatedMessage.messageType === 'USER') {
-        this.server
-          .to(`user:${updatedMessage.senderId}`)
-          .emit('messageRead', readEvent);
-        this.server
-          .to(`user:${updatedMessage.receiverId}`)
-          .emit('messageRead', readEvent);
-      }
-      // For group messages
-      else if (updatedMessage.messageType === 'GROUP') {
-        this.server
-          .to(`group:${updatedMessage.groupId}`)
-          .emit('messageRead', readEvent);
-      }
-
-      return updatedMessage;
-    } catch (error) {
-      client.emit('error', { message: error.message });
+    // Đối với tin nhắn cá nhân
+    if (message.messageType === 'USER') {
+      this.server.to(`user:${message.senderId}`).emit('messageRead', readEvent);
+      this.server
+        .to(`user:${message.receiverId}`)
+        .emit('messageRead', readEvent);
+    }
+    // Đối với tin nhắn nhóm
+    else if (message.messageType === 'GROUP') {
+      this.server.to(`group:${message.groupId}`).emit('messageRead', readEvent);
     }
   }
 
-  @SubscribeMessage('recallMessage')
-  async handleRecallMessage(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { messageId: string },
-  ) {
-    const userId = await this.getUserFromSocket(client);
+  /**
+   * Phát sự kiện thu hồi tin nhắn
+   * @param message Tin nhắn đã được thu hồi
+   * @param userId ID của người thu hồi
+   */
+  notifyMessageRecalled(message: MessageData, userId: string) {
+    const recallEvent = {
+      messageId: message.id,
+      userId,
+      timestamp: new Date(),
+    };
 
-    try {
-      // Update last activity
-      this.lastActivity.set(client.id, Date.now());
-      const recalledMessage = await this.messageService.recallMessage(
-        data.messageId,
-        userId,
-      );
-
-      const recallEvent = {
-        messageId: recalledMessage.id,
-        userId,
-        timestamp: new Date(),
-      };
-
-      if (recalledMessage.messageType === 'USER') {
-        this.server
-          .to(`user:${recalledMessage.senderId}`)
-          .emit('messageRecalled', recallEvent);
-        this.server
-          .to(`user:${recalledMessage.receiverId}`)
-          .emit('messageRecalled', recallEvent);
-      } else if (recalledMessage.messageType === 'GROUP') {
-        this.server
-          .to(`group:${recalledMessage.groupId}`)
-          .emit('messageRecalled', recallEvent);
-      }
-
-      return recalledMessage;
-    } catch (error) {
-      client.emit('error', { message: error.message });
+    // Đối với tin nhắn cá nhân
+    if (message.messageType === 'USER') {
+      this.server
+        .to(`user:${message.senderId}`)
+        .emit('messageRecalled', recallEvent);
+      this.server
+        .to(`user:${message.receiverId}`)
+        .emit('messageRecalled', recallEvent);
+    }
+    // Đối với tin nhắn nhóm
+    else if (message.messageType === 'GROUP') {
+      this.server
+        .to(`group:${message.groupId}`)
+        .emit('messageRecalled', recallEvent);
     }
   }
 
-  @SubscribeMessage('addReaction')
-  async handleAddReaction(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() reaction: CreateReactionDto,
-  ) {
-    const userId = await this.getUserFromSocket(client);
+  /**
+   * Phát sự kiện cập nhật phản ứng tin nhắn
+   * @param message Tin nhắn đã được cập nhật phản ứng
+   * @param userId ID của người thêm/xóa phản ứng
+   */
+  notifyMessageReactionUpdated(message: MessageData, userId: string) {
+    const reactionEvent = {
+      messageId: message.id,
+      reactions: message.reactions,
+      userId,
+      timestamp: new Date(),
+    };
 
-    try {
-      // Update last activity
-      this.lastActivity.set(client.id, Date.now());
-      const updatedMessage = await this.messageService.addReaction(
-        reaction,
-        userId,
-      );
-
-      const reactionEvent = {
-        messageId: updatedMessage.id,
-        reactions: updatedMessage.reactions,
-        userId,
-        timestamp: new Date(),
-      };
-
-      if (updatedMessage.messageType === 'USER') {
-        this.server
-          .to(`user:${updatedMessage.senderId}`)
-          .emit('messageReactionUpdated', reactionEvent);
-        this.server
-          .to(`user:${updatedMessage.receiverId}`)
-          .emit('messageReactionUpdated', reactionEvent);
-      } else if (updatedMessage.messageType === 'GROUP') {
-        this.server
-          .to(`group:${updatedMessage.groupId}`)
-          .emit('messageReactionUpdated', reactionEvent);
-      }
-
-      return updatedMessage;
-    } catch (error) {
-      client.emit('error', { message: error.message });
+    // Đối với tin nhắn cá nhân
+    if (message.messageType === 'USER') {
+      this.server
+        .to(`user:${message.senderId}`)
+        .emit('messageReactionUpdated', reactionEvent);
+      this.server
+        .to(`user:${message.receiverId}`)
+        .emit('messageReactionUpdated', reactionEvent);
     }
-  }
-
-  @SubscribeMessage('removeReaction')
-  async handleRemoveReaction(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { messageId: string },
-  ) {
-    const userId = await this.getUserFromSocket(client);
-
-    try {
-      // Update last activity
-      this.lastActivity.set(client.id, Date.now());
-      const updatedMessage = await this.messageService.removeReaction(
-        data.messageId,
-        userId,
-      );
-
-      const reactionEvent = {
-        messageId: updatedMessage.id,
-        reactions: updatedMessage.reactions,
-        userId,
-        timestamp: new Date(),
-      };
-
-      if (updatedMessage.messageType === 'USER') {
-        this.server
-          .to(`user:${updatedMessage.senderId}`)
-          .emit('messageReactionUpdated', reactionEvent);
-        this.server
-          .to(`user:${updatedMessage.receiverId}`)
-          .emit('messageReactionUpdated', reactionEvent);
-      } else if (updatedMessage.messageType === 'GROUP') {
-        this.server
-          .to(`group:${updatedMessage.groupId}`)
-          .emit('messageReactionUpdated', reactionEvent);
-      }
-
-      return updatedMessage;
-    } catch (error) {
-      client.emit('error', { message: error.message });
-    }
-  }
-
-  @SubscribeMessage('getUserStatus')
-  async handleGetUserStatus(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { userIds: string[] },
-  ) {
-    const requestingUserId = await this.getUserFromSocket(client);
-
-    // Update last activity
-    this.lastActivity.set(client.id, Date.now());
-
-    try {
-      const statusMap = {};
-
-      for (const userId of data.userIds) {
-        const isOnline =
-          this.userSockets.has(userId) && this.userSockets.get(userId).size > 0;
-        statusMap[userId] = {
-          userId,
-          status: isOnline ? 'online' : 'offline',
-          timestamp: Date.now(),
-        };
-      }
-
-      return statusMap;
-    } catch (error) {
-      client.emit('error', { message: error.message });
+    // Đối với tin nhắn nhóm
+    else if (message.messageType === 'GROUP') {
+      this.server
+        .to(`group:${message.groupId}`)
+        .emit('messageReactionUpdated', reactionEvent);
     }
   }
 
@@ -486,6 +366,33 @@ export class MessageGateway
     }
   }
 
+  @SubscribeMessage('getUserStatus')
+  async handleGetUserStatus(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { userIds: string[] },
+  ) {
+    // Update last activity
+    this.lastActivity.set(client.id, Date.now());
+
+    try {
+      const statusMap = {};
+
+      for (const userId of data.userIds) {
+        const isOnline =
+          this.userSockets.has(userId) && this.userSockets.get(userId).size > 0;
+        statusMap[userId] = {
+          userId,
+          status: isOnline ? 'online' : 'offline',
+          timestamp: Date.now(),
+        };
+      }
+
+      return statusMap;
+    } catch (error) {
+      client.emit('error', { message: error.message });
+    }
+  }
+
   @SubscribeMessage('stopTyping')
   async handleStopTyping(
     @ConnectedSocket() client: Socket,
@@ -514,55 +421,34 @@ export class MessageGateway
     }
   }
 
-  @SubscribeMessage('messageWithMediaSent')
-  async handleMessageWithMedia(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { messageId: string },
-  ) {
-    const userId = await this.getUserFromSocket(client);
-
-    // Update last activity
-    this.lastActivity.set(client.id, Date.now());
-
-    try {
-      // Get the message details
-      const message = await this.prisma.message.findUnique({
-        where: { id: data.messageId },
+  /**
+   * Phát sự kiện tin nhắn có media
+   * @param message Tin nhắn có media đã được lưu vào database
+   */
+  notifyMessageWithMedia(message: MessageData) {
+    // Phát sự kiện dựa trên loại tin nhắn
+    if (message.messageType === 'USER') {
+      // Đối với tin nhắn cá nhân, phát đến cả người gửi và người nhận
+      this.server.to(`user:${message.senderId}`).emit('newMessage', {
+        type: 'user',
+        message,
+        timestamp: new Date(),
       });
 
-      if (!message) {
-        client.emit('error', { message: 'Message not found' });
-        return;
-      }
-
-      // Emit to appropriate rooms based on message type
-      if (message.messageType === 'USER') {
-        // For direct messages, emit to both sender and receiver
-        this.server.to(`user:${message.senderId}`).emit('newMessage', {
+      if (message.receiverId) {
+        this.server.to(`user:${message.receiverId}`).emit('newMessage', {
           type: 'user',
           message,
           timestamp: new Date(),
         });
-
-        if (message.receiverId) {
-          this.server.to(`user:${message.receiverId}`).emit('newMessage', {
-            type: 'user',
-            message,
-            timestamp: new Date(),
-          });
-        }
-      } else if (message.messageType === 'GROUP' && message.groupId) {
-        // For group messages, emit to the group
-        this.server.to(`group:${message.groupId}`).emit('newMessage', {
-          type: 'group',
-          message,
-          timestamp: new Date(),
-        });
       }
-
-      return message;
-    } catch (error) {
-      client.emit('error', { message: error.message });
+    } else if (message.messageType === 'GROUP' && message.groupId) {
+      // Đối với tin nhắn nhóm, phát đến phòng nhóm
+      this.server.to(`group:${message.groupId}`).emit('newMessage', {
+        type: 'group',
+        message,
+        timestamp: new Date(),
+      });
     }
   }
 }

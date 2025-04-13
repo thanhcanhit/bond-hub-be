@@ -9,12 +9,16 @@ import { FriendStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { SendFriendRequestDto } from './dto/send-friend-request.dto';
 import { RespondFriendRequestDto } from './dto/respond-friend-request.dto';
+import { FriendGateway } from './friend.gateway';
 
 @Injectable()
 export class FriendService {
   private readonly logger = new Logger('FriendService');
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private friendGateway: FriendGateway,
+  ) {}
 
   // Gửi lời mời kết bạn
   async sendFriendRequest(senderId: string, dto: SendFriendRequestDto) {
@@ -153,7 +157,7 @@ export class FriendService {
     }
 
     // Tạo mới lời mời kết bạn
-    return this.prisma.friend.create({
+    const newFriendRequest = await this.prisma.friend.create({
       data: {
         senderId,
         receiverId,
@@ -189,6 +193,11 @@ export class FriendService {
         },
       },
     });
+
+    // Emit reload event to both users
+    this.friendGateway.emitReloadEvent(senderId, receiverId);
+
+    return newFriendRequest;
   }
 
   // Phản hồi lời mời kết bạn (chấp nhận, từ chối, block)
@@ -222,7 +231,7 @@ export class FriendService {
     }
 
     // Cập nhật trạng thái lời mời
-    return this.prisma.friend.update({
+    const updatedFriendRequest = await this.prisma.friend.update({
       where: { id: requestId },
       data: {
         status,
@@ -257,6 +266,10 @@ export class FriendService {
         },
       },
     });
+    // Emit reload event to both users
+    this.friendGateway.emitReloadEvent(friendRequest.senderId, userId);
+
+    return updatedFriendRequest;
   }
 
   // Block người dùng
@@ -298,10 +311,12 @@ export class FriendService {
       },
     });
 
+    let blockedRelationship: any;
+
     if (existingFriendship) {
       // Nếu người dùng hiện tại là người gửi
       if (existingFriendship.senderId === userId) {
-        return this.prisma.friend.update({
+        blockedRelationship = await this.prisma.friend.update({
           where: { id: existingFriendship.id },
           data: {
             status: FriendStatus.BLOCKED,
@@ -313,17 +328,31 @@ export class FriendService {
         await this.prisma.friend.delete({
           where: { id: existingFriendship.id },
         });
+
+        // Tạo mới mối quan hệ block
+        blockedRelationship = await this.prisma.friend.create({
+          data: {
+            senderId: userId,
+            receiverId: targetId,
+            status: FriendStatus.BLOCKED,
+          },
+        });
       }
+    } else {
+      // Tạo mới mối quan hệ block
+      blockedRelationship = await this.prisma.friend.create({
+        data: {
+          senderId: userId,
+          receiverId: targetId,
+          status: FriendStatus.BLOCKED,
+        },
+      });
     }
 
-    // Tạo mới mối quan hệ block
-    return this.prisma.friend.create({
-      data: {
-        senderId: userId,
-        receiverId: targetId,
-        status: FriendStatus.BLOCKED,
-      },
-    });
+    // Emit reload event to both users
+    this.friendGateway.emitReloadEvent(userId, targetId);
+
+    return blockedRelationship;
   }
 
   // Lấy danh sách lời mời kết bạn đã nhận
@@ -517,9 +546,15 @@ export class FriendService {
       throw new NotFoundException('Không tìm thấy mối quan hệ block');
     }
 
-    return this.prisma.friend.delete({
+    // Delete the blocked relationship
+    const result = await this.prisma.friend.delete({
       where: { id: blockedRelation.id },
     });
+
+    // Emit reload event to both users
+    this.friendGateway.emitReloadEvent(userId, targetId);
+
+    return result;
   }
 
   // Hủy kết bạn
@@ -550,9 +585,15 @@ export class FriendService {
       throw new NotFoundException('Không tìm thấy mối quan hệ bạn bè');
     }
 
-    return this.prisma.friend.delete({
+    // Delete the friendship
+    const result = await this.prisma.friend.delete({
       where: { id: friendship.id },
     });
+
+    // Emit reload event to both users
+    this.friendGateway.emitReloadEvent(userId, friendId);
+
+    return result;
   }
 
   // Hủy lời mời kết bạn đã gửi
@@ -574,9 +615,17 @@ export class FriendService {
       throw new NotFoundException('Không tìm thấy lời mời kết bạn');
     }
 
-    return this.prisma.friend.delete({
+    const receiverId = friendRequest.receiverId;
+
+    // Delete the friend request
+    const result = await this.prisma.friend.delete({
       where: { id: requestId },
     });
+
+    // Emit reload event to both users
+    this.friendGateway.emitReloadEvent(userId, receiverId);
+
+    return result;
   }
 
   // Lấy mối quan hệ giữa hai người dùng

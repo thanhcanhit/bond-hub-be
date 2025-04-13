@@ -3,6 +3,8 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UserMessageDto } from './dtos/user-message.dto';
@@ -27,6 +29,7 @@ import {
   ConversationItemDto,
   ConversationListResponseDto,
 } from './dtos/conversation-list.dto';
+import { MessageGateway } from './message.gateway';
 
 const PAGE_SIZE = 30;
 
@@ -45,6 +48,8 @@ export class MessageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
+    @Inject(forwardRef(() => MessageGateway))
+    private readonly messageGateway?: MessageGateway,
   ) {}
 
   async createUserMessage(message: UserMessageDto, userId: string) {
@@ -67,7 +72,7 @@ export class MessageService {
         metadata: item.metadata || {},
       })) || [];
 
-    return this.prisma.message.create({
+    const savedMessage = await this.prisma.message.create({
       data: {
         senderId: userId,
         receiverId: message.receiverId,
@@ -79,6 +84,13 @@ export class MessageService {
         messageType: 'USER',
       },
     });
+
+    // Thông báo qua WebSocket nếu có gateway
+    if (this.messageGateway) {
+      this.messageGateway.notifyNewUserMessage(savedMessage);
+    }
+
+    return savedMessage;
   }
 
   /**
@@ -178,6 +190,11 @@ export class MessageService {
       },
     });
 
+    // Thông báo qua WebSocket nếu có gateway
+    if (this.messageGateway) {
+      this.messageGateway.notifyNewUserMessage(createdMessage);
+    }
+
     return createdMessage;
   }
 
@@ -208,7 +225,7 @@ export class MessageService {
         metadata: item.metadata || {},
       })) || [];
 
-    return this.prisma.message.create({
+    const savedMessage = await this.prisma.message.create({
       data: {
         senderId: userId,
         groupId: message.groupId,
@@ -220,6 +237,13 @@ export class MessageService {
         messageType: 'GROUP',
       },
     });
+
+    // Thông báo qua WebSocket nếu có gateway
+    if (this.messageGateway) {
+      this.messageGateway.notifyNewGroupMessage(savedMessage);
+    }
+
+    return savedMessage;
   }
 
   /**
@@ -323,7 +347,26 @@ export class MessageService {
       },
     });
 
+    // Thông báo qua WebSocket nếu có gateway
+    if (this.messageGateway) {
+      this.messageGateway.notifyNewGroupMessage(createdMessage);
+    }
+
     return createdMessage;
+  }
+
+  /**
+   * Lấy danh sách các nhóm mà người dùng là thành viên
+   * @param userId ID của người dùng
+   * @returns Danh sách ID của các nhóm
+   */
+  async getUserGroups(userId: string): Promise<string[]> {
+    const userGroups = await this.prisma.groupMember.findMany({
+      where: { userId },
+      select: { groupId: true },
+    });
+
+    return userGroups.map((group) => group.groupId);
   }
 
   async getGroupMessages(requestUserId: string, groupId: string, page: number) {
@@ -442,7 +485,7 @@ export class MessageService {
       }
     }
 
-    return this.prisma.message.update({
+    const updatedMessage = await this.prisma.message.update({
       where: {
         id: messageId,
       },
@@ -452,6 +495,13 @@ export class MessageService {
         },
       },
     });
+
+    // Thông báo qua WebSocket nếu có gateway
+    if (this.messageGateway) {
+      this.messageGateway.notifyMessageRead(updatedMessage, readerId);
+    }
+
+    return updatedMessage;
   }
 
   async unreadMessage(messageId: string, readerId: string) {
@@ -585,7 +635,7 @@ export class MessageService {
       });
     }
 
-    return this.prisma.message.update({
+    const updatedMessage = await this.prisma.message.update({
       where: {
         id: reaction.messageId,
       },
@@ -599,6 +649,13 @@ export class MessageService {
         },
       },
     });
+
+    // Thông báo qua WebSocket nếu có gateway
+    if (this.messageGateway) {
+      this.messageGateway.notifyMessageReactionUpdated(updatedMessage, userId);
+    }
+
+    return updatedMessage;
   }
 
   async removeReaction(messageId: string, userId: string) {
@@ -650,7 +707,7 @@ export class MessageService {
       (r: MessageReaction) => r.userId !== userId,
     );
 
-    return this.prisma.message.update({
+    const updatedMessage = await this.prisma.message.update({
       where: {
         id: messageId,
       },
@@ -660,6 +717,13 @@ export class MessageService {
         },
       },
     });
+
+    // Thông báo qua WebSocket nếu có gateway
+    if (this.messageGateway) {
+      this.messageGateway.notifyMessageReactionUpdated(updatedMessage, userId);
+    }
+
+    return updatedMessage;
   }
 
   async deleteMessageSelfSide(messageId: string, userId: string) {
@@ -944,6 +1008,15 @@ export class MessageService {
               messageType: 'USER',
             },
           });
+        }
+      }
+
+      // Thông báo qua WebSocket nếu có gateway và tin nhắn được tạo mới
+      if (this.messageGateway && !messageData.messageId) {
+        if (messageData.groupId) {
+          this.messageGateway.notifyMessageWithMedia(message);
+        } else if (messageData.receiverId) {
+          this.messageGateway.notifyMessageWithMedia(message);
         }
       }
 
@@ -1272,6 +1345,11 @@ export class MessageService {
             },
           });
 
+          // Thông báo qua WebSocket nếu có gateway
+          if (this.messageGateway) {
+            this.messageGateway.notifyNewUserMessage(newMessage);
+          }
+
           results.push({
             type: 'user',
             message: newMessage,
@@ -1306,6 +1384,11 @@ export class MessageService {
               forwardedFrom: originalMessage.id,
             },
           });
+
+          // Thông báo qua WebSocket nếu có gateway
+          if (this.messageGateway) {
+            this.messageGateway.notifyNewGroupMessage(newMessage);
+          }
 
           results.push({
             type: 'group',
