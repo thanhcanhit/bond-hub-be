@@ -18,8 +18,8 @@ RUN npm run build && ls -la dist
 # Production stage
 FROM node:20-alpine AS production
 
-# Install PostgreSQL client and build dependencies
-RUN apk add --no-cache postgresql-client python3 make g++
+# Install PostgreSQL client, cron, and build dependencies
+RUN apk add --no-cache postgresql-client python3 make g++ cronie
 
 WORKDIR /app
 

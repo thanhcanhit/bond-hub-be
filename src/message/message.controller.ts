@@ -20,6 +20,7 @@ import { UserMessageDto } from './dtos/user-message.dto';
 import { GroupMessageDto } from './dtos/group-message.dto';
 import { CreateReactionDto } from './dtos/create-reaction.dto';
 import { MessageMediaUploadDto } from './dtos/message-media.dto';
+import { ForwardMessageDto } from './dtos/forward-message.dto';
 
 @Controller('messages')
 export class MessageController {
@@ -27,6 +28,17 @@ export class MessageController {
     private readonly messageService: MessageService,
     private readonly messageGateway: MessageGateway,
   ) {}
+
+  @Get('/conversations')
+  async getConversationList(
+    @Request() req: Request,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    const requestUserId = req['user'].sub;
+    console.log('Getting conversation list for user:', requestUserId);
+    return this.messageService.getConversationList(requestUserId, page, limit);
+  }
 
   @Get('/group/:groupId')
   async getGroupMessages(
@@ -220,5 +232,51 @@ export class MessageController {
     // No need to notify via WebSocket as clients will receive updates through regular message events
 
     return result;
+  }
+
+  @Post('/forward')
+  async forwardMessage(
+    @Body() forwardData: ForwardMessageDto,
+    @Request() req: Request,
+  ) {
+    const requestUserId = req['user'].sub;
+    const results = await this.messageService.forwardMessage(
+      forwardData,
+      requestUserId,
+    );
+
+    // Emit socket events for each forwarded message
+    for (const result of results) {
+      if (result.type === 'user') {
+        // Emit to sender
+        this.messageGateway.server
+          .to(`user:${requestUserId}`)
+          .emit('newMessage', {
+            type: 'user',
+            message: result.message,
+            timestamp: new Date(),
+          });
+
+        // Emit to receiver
+        this.messageGateway.server
+          .to(`user:${result.message.receiverId}`)
+          .emit('newMessage', {
+            type: 'user',
+            message: result.message,
+            timestamp: new Date(),
+          });
+      } else if (result.type === 'group') {
+        // Emit to group
+        this.messageGateway.server
+          .to(`group:${result.message.groupId}`)
+          .emit('newMessage', {
+            type: 'group',
+            message: result.message,
+            timestamp: new Date(),
+          });
+      }
+    }
+
+    return results;
   }
 }
