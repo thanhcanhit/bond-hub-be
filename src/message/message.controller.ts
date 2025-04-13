@@ -15,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { MessageService } from './message.service';
-import { MessageGateway } from './message.gateway';
+
 import { UserMessageDto } from './dtos/user-message.dto';
 import { GroupMessageDto } from './dtos/group-message.dto';
 import { CreateReactionDto } from './dtos/create-reaction.dto';
@@ -24,10 +24,7 @@ import { ForwardMessageDto } from './dtos/forward-message.dto';
 
 @Controller('messages')
 export class MessageController {
-  constructor(
-    private readonly messageService: MessageService,
-    private readonly messageGateway: MessageGateway,
-  ) {}
+  constructor(private readonly messageService: MessageService) {}
 
   @Get('/conversations')
   async getConversationList(
@@ -106,26 +103,7 @@ export class MessageController {
       requestUserId,
     );
 
-    // If message contains media, notify via WebSocket
-    if (files && files.length > 0) {
-      // Emit to sender's room
-      this.messageGateway.server
-        .to(`user:${requestUserId}`)
-        .emit('newMessage', {
-          type: 'user',
-          message: createdMessage,
-          timestamp: new Date(),
-        });
-
-      // Emit to receiver's room
-      this.messageGateway.server
-        .to(`user:${messageBody.receiverId}`)
-        .emit('newMessage', {
-          type: 'user',
-          message: createdMessage,
-          timestamp: new Date(),
-        });
-    }
+    // Thông báo qua WebSocket được xử lý tự động trong MessageService
 
     return createdMessage;
   }
@@ -145,17 +123,7 @@ export class MessageController {
         requestUserId,
       );
 
-    // If message contains media, notify via WebSocket
-    if (files && files.length > 0) {
-      // Emit to the group room
-      this.messageGateway.server
-        .to(`group:${messageBody.groupId}`)
-        .emit('newMessage', {
-          type: 'group',
-          message: createdMessage,
-          timestamp: new Date(),
-        });
-    }
+    // Thông báo qua WebSocket được xử lý tự động trong MessageService
 
     return createdMessage;
   }
@@ -245,37 +213,7 @@ export class MessageController {
       requestUserId,
     );
 
-    // Emit socket events for each forwarded message
-    for (const result of results) {
-      if (result.type === 'user') {
-        // Emit to sender
-        this.messageGateway.server
-          .to(`user:${requestUserId}`)
-          .emit('newMessage', {
-            type: 'user',
-            message: result.message,
-            timestamp: new Date(),
-          });
-
-        // Emit to receiver
-        this.messageGateway.server
-          .to(`user:${result.message.receiverId}`)
-          .emit('newMessage', {
-            type: 'user',
-            message: result.message,
-            timestamp: new Date(),
-          });
-      } else if (result.type === 'group') {
-        // Emit to group
-        this.messageGateway.server
-          .to(`group:${result.message.groupId}`)
-          .emit('newMessage', {
-            type: 'group',
-            message: result.message,
-            timestamp: new Date(),
-          });
-      }
-    }
+    // Thông báo qua WebSocket được xử lý tự động trong MessageService
 
     return results;
   }
