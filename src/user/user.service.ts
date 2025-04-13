@@ -10,8 +10,8 @@ export class UserService {
     return this.prisma.user.findMany();
   }
 
-  async getUserById(id: string) {
-    return this.prisma.user.findUnique({
+  async getUserById(id: string, currentUserId?: string) {
+    const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
         id: true,
@@ -33,6 +33,128 @@ export class UserService {
         },
       },
     });
+
+    if (!user) return null;
+
+    // If no currentUserId is provided or the user is viewing their own profile, return full data
+    if (!currentUserId || currentUserId === id) {
+      return {
+        ...user,
+        relationship:
+          currentUserId === id
+            ? {
+                status: 'SELF',
+                message: 'Đây là chính bạn',
+                friendshipId: null,
+              }
+            : null,
+      };
+    }
+
+    // Check friendship status
+    const relationship = await this.prisma.friend.findFirst({
+      where: {
+        OR: [
+          {
+            senderId: currentUserId,
+            receiverId: id,
+          },
+          {
+            senderId: id,
+            receiverId: currentUserId,
+          },
+        ],
+      },
+    });
+
+    // Prepare the response
+    const response = {
+      id: user.id,
+      // Only include sensitive information if they are friends
+      email: null,
+      phoneNumber: null,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      userInfo: {
+        fullName: user.userInfo?.fullName,
+        bio: user.userInfo?.bio,
+        profilePictureUrl: user.userInfo?.profilePictureUrl,
+        statusMessage: user.userInfo?.statusMessage,
+        coverImgUrl: user.userInfo?.coverImgUrl,
+        // Restrict sensitive userInfo fields
+        dateOfBirth: null,
+        gender: null,
+        lastSeen: null,
+      },
+      relationship: null,
+    };
+
+    // If there's a relationship and it's ACCEPTED, include the sensitive information
+    if (relationship && relationship.status === FriendStatus.ACCEPTED) {
+      response.email = user.email;
+      response.phoneNumber = user.phoneNumber;
+      if (user.userInfo) {
+        response.userInfo.dateOfBirth = user.userInfo.dateOfBirth;
+        response.userInfo.gender = user.userInfo.gender;
+        response.userInfo.lastSeen = user.userInfo.lastSeen;
+      }
+    }
+
+    // Add relationship information
+    if (relationship) {
+      // Determine relationship type based on status and roles
+      let status = '';
+      let message = '';
+
+      switch (relationship.status) {
+        case FriendStatus.PENDING:
+          if (relationship.senderId === currentUserId) {
+            status = 'PENDING_SENT';
+            message = 'Đã gửi lời mời kết bạn';
+          } else {
+            status = 'PENDING_RECEIVED';
+            message = 'Đã nhận lời mời kết bạn';
+          }
+          break;
+        case FriendStatus.ACCEPTED:
+          status = 'FRIEND';
+          message = 'Đã là bạn bè';
+          break;
+        case FriendStatus.DECLINED:
+          if (relationship.senderId === currentUserId) {
+            status = 'DECLINED_SENT';
+            message = 'Lời mời kết bạn đã bị từ chối';
+          } else {
+            status = 'DECLINED_RECEIVED';
+            message = 'Bạn đã từ chối lời mời kết bạn';
+          }
+          break;
+        case FriendStatus.BLOCKED:
+          if (relationship.senderId === currentUserId) {
+            status = 'BLOCKED';
+            message = 'Bạn đã chặn người dùng này';
+          } else {
+            status = 'BLOCKED_BY';
+            message = 'Bạn đã bị người dùng này chặn';
+          }
+          break;
+      }
+
+      response.relationship = {
+        status,
+        message,
+        friendshipId: relationship.id,
+      };
+    } else {
+      // No relationship exists
+      response.relationship = {
+        status: 'NONE',
+        message: 'Không có mối quan hệ',
+        friendshipId: null,
+      };
+    }
+
+    return response;
   }
 
   async getUserBasicInfo(id: string) {
