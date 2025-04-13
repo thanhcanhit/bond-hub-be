@@ -84,28 +84,90 @@ export class FriendService {
 
       // Nếu đã bị từ chối, kiểm tra thời gian
       if (existingFriendship.status === FriendStatus.DECLINED) {
-        const declinedTime = existingFriendship.updatedAt;
-        const currentTime = new Date();
-        // const hoursDifference =
-        //   (currentTime.getTime() - declinedTime.getTime()) / (1000 * 60 * 60);
+        // Kiểm tra xem người gửi hiện tại có phải là người nhận trước đó không
+        if (existingFriendship.receiverId === senderId) {
+          // Nếu người gửi hiện tại là người nhận trước đó, đảo ngược vai trò
+          // Xóa mối quan hệ cũ
+          await this.prisma.friend.delete({
+            where: { id: existingFriendship.id },
+          });
 
-        // // Nếu chưa đủ 48 giờ
-        // if (hoursDifference < 48) {
-        //   throw new ForbiddenException(
-        //     `Bạn có thể gửi lại lời mời kết bạn sau ${Math.ceil(
-        //       48 - hoursDifference,
-        //     )} giờ nữa`,
-        //   );
-        // }
-        // Nếu đã đủ 48 giờ, cập nhật lại trạng thái
-        return this.prisma.friend.update({
-          where: { id: existingFriendship.id },
-          data: {
-            status: FriendStatus.PENDING,
-            updatedAt: new Date(),
-            introduce: introduce || null,
-          },
-        });
+          // Tạo mới mối quan hệ với vai trò đảo ngược
+          return this.prisma.friend.create({
+            data: {
+              senderId,
+              receiverId,
+              status: FriendStatus.PENDING,
+              introduce: introduce || null,
+            },
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  email: true,
+                  phoneNumber: true,
+                  userInfo: {
+                    select: {
+                      fullName: true,
+                      profilePictureUrl: true,
+                    },
+                  },
+                },
+              },
+              receiver: {
+                select: {
+                  id: true,
+                  email: true,
+                  phoneNumber: true,
+                  userInfo: {
+                    select: {
+                      fullName: true,
+                      profilePictureUrl: true,
+                    },
+                  },
+                },
+              },
+            },
+          });
+        } else {
+          // Nếu người gửi hiện tại vẫn là người gửi trước đó, chỉ cập nhật trạng thái
+          return this.prisma.friend.update({
+            where: { id: existingFriendship.id },
+            data: {
+              status: FriendStatus.PENDING,
+              updatedAt: new Date(),
+              introduce: introduce || null,
+            },
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  email: true,
+                  phoneNumber: true,
+                  userInfo: {
+                    select: {
+                      fullName: true,
+                      profilePictureUrl: true,
+                    },
+                  },
+                },
+              },
+              receiver: {
+                select: {
+                  id: true,
+                  email: true,
+                  phoneNumber: true,
+                  userInfo: {
+                    select: {
+                      fullName: true,
+                      profilePictureUrl: true,
+                    },
+                  },
+                },
+              },
+            },
+          });
+        }
       }
 
       // Nếu đang chờ xác nhận
