@@ -122,7 +122,7 @@ export class UserService {
           break;
         case FriendStatus.DECLINED:
           if (relationship.senderId === currentUserId) {
-            status = 'DECLINED_SENT';
+            status = 'NONE';
             message = 'Lời mời kết bạn đã bị từ chối';
           } else {
             status = 'DECLINED_RECEIVED';
@@ -264,7 +264,7 @@ export class UserService {
             break;
           case FriendStatus.DECLINED:
             if (relationship.senderId === currentUserId) {
-              status = 'DECLINED_SENT';
+              status = 'NONE';
               message = 'Lời mời kết bạn đã bị từ chối';
             } else {
               status = 'DECLINED_RECEIVED';

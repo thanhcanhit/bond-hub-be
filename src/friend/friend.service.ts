@@ -83,31 +83,30 @@ export class FriendService {
       }
 
       // Nếu đã bị từ chối, kiểm tra thời gian
-      // if (existingFriendship.status === FriendStatus.DECLINED) {
-      //   const declinedTime = existingFriendship.updatedAt;
-      //   const currentTime = new Date();
-      //   const hoursDifference =
-      //     (currentTime.getTime() - declinedTime.getTime()) / (1000 * 60 * 60);
+      if (existingFriendship.status === FriendStatus.DECLINED) {
+        const declinedTime = existingFriendship.updatedAt;
+        const currentTime = new Date();
+        // const hoursDifference =
+        //   (currentTime.getTime() - declinedTime.getTime()) / (1000 * 60 * 60);
 
-      //   // Nếu chưa đủ 48 giờ
-      //   if (hoursDifference < 48) {
-      //     throw new ForbiddenException(
-      //       `Bạn có thể gửi lại lời mời kết bạn sau ${Math.ceil(
-      //         48 - hoursDifference,
-      //       )} giờ nữa`,
-      //     );
-      //   }
-
-      //   // Nếu đã đủ 48 giờ, cập nhật lại trạng thái
-      //   return this.prisma.friend.update({
-      //     where: { id: existingFriendship.id },
-      //     data: {
-      //       status: FriendStatus.PENDING,
-      //       updatedAt: new Date(),
-      //       introduce: introduce || null,
-      //     },
-      //   });
-      // }
+        // // Nếu chưa đủ 48 giờ
+        // if (hoursDifference < 48) {
+        //   throw new ForbiddenException(
+        //     `Bạn có thể gửi lại lời mời kết bạn sau ${Math.ceil(
+        //       48 - hoursDifference,
+        //     )} giờ nữa`,
+        //   );
+        // }
+        // Nếu đã đủ 48 giờ, cập nhật lại trạng thái
+        return this.prisma.friend.update({
+          where: { id: existingFriendship.id },
+          data: {
+            status: FriendStatus.PENDING,
+            updatedAt: new Date(),
+            introduce: introduce || null,
+          },
+        });
+      }
 
       // Nếu đang chờ xác nhận
       if (existingFriendship.status === FriendStatus.PENDING) {
@@ -744,7 +743,7 @@ export class FriendService {
         break;
       case FriendStatus.DECLINED:
         if (relationship.senderId === userId) {
-          status = 'DECLINED_SENT';
+          status = 'NONE';
           message = 'Lời mời kết bạn đã bị từ chối';
         } else {
           status = 'DECLINED_RECEIVED';
