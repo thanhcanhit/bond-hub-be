@@ -338,6 +338,23 @@ export class MessageGateway
     }
   }
 
+  /**
+   * Phát sự kiện xóa tin nhắn (phía người dùng)
+   * @param message Tin nhắn đã bị xóa
+   * @param userId ID của người xóa tin nhắn
+   */
+  notifyMessageDeleted(message: MessageData, userId: string) {
+    const deleteEvent = {
+      messageId: message.id,
+      userId,
+      deletedBy: message.deletedBy,
+      timestamp: new Date(),
+    };
+
+    // Chỉ thông báo cho người xóa tin nhắn
+    this.server.to(`user:${userId}`).emit('messageDeleted', deleteEvent);
+  }
+
   @SubscribeMessage('typing')
   async handleTyping(
     @ConnectedSocket() client: Socket,

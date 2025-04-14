@@ -442,7 +442,7 @@ export class MessageService {
       throw new ForbiddenException('You can only recall your own messages');
     }
 
-    return this.prisma.message.update({
+    const updatedMessage = await this.prisma.message.update({
       where: {
         id: messageId,
       },
@@ -450,6 +450,13 @@ export class MessageService {
         recalled: true,
       },
     });
+
+    // Thông báo qua WebSocket nếu có gateway
+    if (this.messageGateway) {
+      this.messageGateway.notifyMessageRecalled(updatedMessage, userId);
+    }
+
+    return updatedMessage;
   }
 
   async readMessage(messageId: string, readerId: string) {
@@ -549,7 +556,7 @@ export class MessageService {
     updatedReadBy.delete(readerId);
 
     // Update the message with the filtered array
-    return this.prisma.message.update({
+    const updatedMessage = await this.prisma.message.update({
       where: {
         id: messageId,
       },
@@ -559,6 +566,13 @@ export class MessageService {
         },
       },
     });
+
+    // Thông báo qua WebSocket nếu có gateway
+    if (this.messageGateway) {
+      this.messageGateway.notifyMessageRead(updatedMessage, readerId);
+    }
+
+    return updatedMessage;
   }
 
   async addReaction(reaction: CreateReactionDto, userId: string) {
@@ -616,7 +630,7 @@ export class MessageService {
     );
 
     if (existsReaction) {
-      return this.prisma.message.update({
+      const updatedMessage = await this.prisma.message.update({
         where: {
           id: reaction.messageId,
         },
@@ -633,6 +647,16 @@ export class MessageService {
           },
         },
       });
+
+      // Thông báo qua WebSocket nếu có gateway
+      if (this.messageGateway) {
+        this.messageGateway.notifyMessageReactionUpdated(
+          updatedMessage,
+          userId,
+        );
+      }
+
+      return updatedMessage;
     }
 
     const updatedMessage = await this.prisma.message.update({
@@ -759,7 +783,7 @@ export class MessageService {
       }
     }
 
-    return this.prisma.message.update({
+    const updatedMessage = await this.prisma.message.update({
       where: {
         id: messageId,
       },
@@ -769,6 +793,13 @@ export class MessageService {
         },
       },
     });
+
+    // Thông báo qua WebSocket nếu có gateway
+    if (this.messageGateway) {
+      this.messageGateway.notifyMessageDeleted(updatedMessage, userId);
+    }
+
+    return updatedMessage;
   }
 
   async findMessagesInGroup(
