@@ -14,7 +14,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
       - PORT=3000
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
@@ -31,7 +31,7 @@ services:
         sleep 2;
       done;
       echo 'PostgreSQL and Redis are ready!';
-      npm run db:setup &&
+      npm run db:migrate &&
       npm run start:prod"
 
   postgres:
@@ -52,6 +52,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7
@@ -74,4 +75,6 @@ networks:
 
 volumes:
   postgres-data:
+    name: vodka-postgres-data
   redis-data:
+    name: vodka-redis-data

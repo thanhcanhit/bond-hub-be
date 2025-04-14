@@ -47,7 +47,7 @@ COPY --from=build-stage /app/node_modules/json-buffer ./node_modules/json-buffer
 COPY --from=build-stage /app/node_modules/cache-manager ./node_modules/cache-manager
 
 # Create a custom package.json for production
-RUN echo '{"name":"bond-hub-be","version":"0.0.1","scripts":{"start":"node dist/src/main.js","start:prod":"node dist/src/main.js","db:migrate":"prisma migrate deploy","db:seed":"prisma db seed","db:setup":"npm run db:migrate && npm run db:seed"},"prisma":{"seed":"ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"}}' > package.json
+RUN echo '{"name":"vodka","version":"0.0.1","scripts":{"start":"node dist/src/main.js","start:prod":"node dist/src/main.js","db:migrate":"prisma migrate deploy","db:seed":"prisma db seed","db:setup":"npm run db:migrate"},"prisma":{"seed":"ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"}}' > package.json
 
 # Copy seed data and TypeScript config
 COPY --from=build-stage /app/prisma/seed.ts ./prisma/

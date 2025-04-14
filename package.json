@@ -1,5 +1,5 @@
 {
-  "name": "bond-hub-be",
+  "name": "vodka",
   "version": "0.0.1",
   "description": "",
   "author": "",
@@ -23,7 +23,7 @@
     "seed": "prisma db seed",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "db:setup": "npm run db:migrate && npm run db:seed"
+    "db:setup": "npm run db:migrate"
   },
   "dependencies": {
     "@aws-sdk/client-sns": "^3.535.0",
