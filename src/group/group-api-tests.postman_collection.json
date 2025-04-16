@@ -1,0 +1,680 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-g7h8-i9j0-k1l2m3n4o5p6",
+    "name": "Group Management API Tests",
+    "description": "Collection để test các tính năng quản lý nhóm",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login - User 1 (Lê Hoàng Khang)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set(\"accessToken\", jsonData.accessToken);",
+                  "pm.environment.set(\"userId\", jsonData.user.id);",
+                  "pm.environment.set(\"userName\", jsonData.user.fullName);",
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Response has access token\", function () {",
+                  "    pm.expect(jsonData.accessToken).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"iamhoangkhang@icloud.com\",\n    \"password\": \"lehoangkhang\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Đăng nhập với tài khoản Lê Hoàng Khang để lấy accessToken"
+          },
+          "response": []
+        },
+        {
+          "name": "Login - User 2 (Nguyễn Thanh Cảnh)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set(\"accessToken2\", jsonData.accessToken);",
+                  "pm.environment.set(\"userId2\", jsonData.user.id);",
+                  "pm.environment.set(\"userName2\", jsonData.user.fullName);",
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Response has access token\", function () {",
+                  "    pm.expect(jsonData.accessToken).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"thanhcanh.dev@gmail.com\",\n    \"password\": \"thanhcanhit\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Đăng nhập với tài khoản Nguyễn Thanh Cảnh để lấy accessToken"
+          },
+          "response": []
+        },
+        {
+          "name": "Login - User 3 (Hồ Thị Như Tâm)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set(\"accessToken3\", jsonData.accessToken);",
+                  "pm.environment.set(\"userId3\", jsonData.user.id);",
+                  "pm.environment.set(\"userName3\", jsonData.user.fullName);",
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Response has access token\", function () {",
+                  "    pm.expect(jsonData.accessToken).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"nhutam050@gmail.com\",\n    \"password\": \"hothinhutam\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Đăng nhập với tài khoản Hồ Thị Như Tâm để lấy accessToken"
+          },
+          "response": []
+        }
+      ],
+      "description": "Các request liên quan đến xác thực để lấy accessToken"
+    },
+    {
+      "name": "Group Management",
+      "item": [
+        {
+          "name": "Create Group",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set(\"groupId\", jsonData.id);",
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Group created successfully\", function () {",
+                  "    pm.expect(jsonData.name).to.eql(\"Nhóm Test Postman\");",
+                  "    pm.expect(jsonData.creatorId).to.eql(pm.environment.get(\"userId\"));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Nhóm Test Postman\",\n    \"creatorId\": \"{{userId}}\",\n    \"avatarUrl\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "groups"]
+            },
+            "description": "Tạo một nhóm mới với người tạo là User 1"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Group info retrieved successfully\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.id).to.eql(pm.environment.get(\"groupId\"));",
+                  "    pm.expect(jsonData.name).to.eql(\"Nhóm Test Postman\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "groups", "{{groupId}}"]
+            },
+            "description": "Lấy thông tin chi tiết của nhóm"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Public Group Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Public group info retrieved successfully\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.id).to.eql(pm.environment.get(\"groupId\"));",
+                  "    pm.expect(jsonData.name).to.exist;",
+                  "    pm.expect(jsonData.memberCount).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}/info",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "groups", "{{groupId}}", "info"]
+            },
+            "description": "Lấy thông tin công khai của nhóm (không cần xác thực)"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Group Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Group updated successfully\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.name).to.eql(\"Nhóm Test Postman (Đã cập nhật)\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Nhóm Test Postman (Đã cập nhật)\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "groups", "{{groupId}}"]
+            },
+            "description": "Cập nhật thông tin nhóm"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Member added successfully\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.userId).to.eql(pm.environment.get(\"userId2\"));",
+                  "    pm.expect(jsonData.groupId).to.eql(pm.environment.get(\"groupId\"));",
+                  "    pm.expect(jsonData.role).to.eql(\"MEMBER\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"groupId\": \"{{groupId}}\",\n    \"userId\": \"{{userId2}}\",\n    \"addedById\": \"{{userId}}\",\n    \"role\": \"MEMBER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}/members",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "groups", "{{groupId}}", "members"]
+            },
+            "description": "Thêm User 2 (Nguyễn Thanh Cảnh) vào nhóm với vai trò MEMBER"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Another Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Member added successfully\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.userId).to.eql(pm.environment.get(\"userId3\"));",
+                  "    pm.expect(jsonData.groupId).to.eql(pm.environment.get(\"groupId\"));",
+                  "    pm.expect(jsonData.role).to.eql(\"MEMBER\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"groupId\": \"{{groupId}}\",\n    \"userId\": \"{{userId3}}\",\n    \"addedById\": \"{{userId}}\",\n    \"role\": \"MEMBER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}/members",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "groups", "{{groupId}}", "members"]
+            },
+            "description": "Thêm User 3 (Hồ Thị Như Tâm) vào nhóm với vai trò MEMBER"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Member Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Member role updated successfully\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.userId).to.eql(pm.environment.get(\"userId2\"));",
+                  "    pm.expect(jsonData.groupId).to.eql(pm.environment.get(\"groupId\"));",
+                  "    pm.expect(jsonData.role).to.eql(\"CO_LEADER\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"role\": \"CO_LEADER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}/members/{{userId2}}/role",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                "{{groupId}}",
+                "members",
+                "{{userId2}}",
+                "role"
+              ]
+            },
+            "description": "Thay đổi vai trò của User 2 từ MEMBER thành CO_LEADER"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Groups",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"User groups retrieved successfully\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "    var found = false;",
+                  "    for (var i = 0; i < jsonData.length; i++) {",
+                  "        if (jsonData[i].id === pm.environment.get(\"groupId\")) {",
+                  "            found = true;",
+                  "            break;",
+                  "        }",
+                  "    }",
+                  "    pm.expect(found).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/user",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "groups", "user"]
+            },
+            "description": "Lấy danh sách nhóm của người dùng hiện tại"
+          },
+          "response": []
+        },
+        {
+          "name": "Join Group via Link",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Joined group successfully\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.groupId).to.eql(pm.environment.get(\"groupId\"));",
+                  "    pm.expect(jsonData.role).to.eql(\"MEMBER\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken3}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"groupId\": \"{{groupId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/join",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "groups", "join"]
+            },
+            "description": "Tham gia nhóm thông qua link (User 3 tham gia nhóm)"
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 204\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}/members/{{userId3}}",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                "{{groupId}}",
+                "members",
+                "{{userId3}}"
+              ]
+            },
+            "description": "Xóa User 3 (Hồ Thị Như Tâm) khỏi nhóm"
+          },
+          "response": []
+        },
+        {
+          "name": "Leave Group",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 204\", function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken2}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}/leave",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "groups", "{{groupId}}", "leave"]
+            },
+            "description": "User 2 (Nguyễn Thanh Cảnh) rời khỏi nhóm"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Group",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Group deleted successfully\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.id).to.eql(pm.environment.get(\"groupId\"));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "groups", "{{groupId}}"]
+            },
+            "description": "Xóa nhóm (chỉ Leader mới có quyền xóa)"
+          },
+          "response": []
+        }
+      ],
+      "description": "Các request liên quan đến quản lý nhóm"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ]
+}
