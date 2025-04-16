@@ -11,12 +11,14 @@ import { MessageModule } from './message/message.module';
 import { StorageModule } from './storage/storage.module';
 import { FriendModule } from './friend/friend.module';
 import { ContactModule } from './contact/contact.module';
+import { EventModule } from './event/event.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    EventModule,
     UserModule,
     PrismaModule,
     AuthModule,

@@ -30,6 +30,7 @@ import {
   ConversationListResponseDto,
 } from './dtos/conversation-list.dto';
 import { MessageGateway } from './message.gateway';
+import { EventService } from '../event/event.service';
 
 const PAGE_SIZE = 30;
 
@@ -50,6 +51,7 @@ export class MessageService {
     private readonly storageService: StorageService,
     @Inject(forwardRef(() => MessageGateway))
     private readonly messageGateway?: MessageGateway,
+    private readonly eventService?: EventService,
   ) {}
 
   async createUserMessage(message: UserMessageDto, userId: string) {
@@ -88,6 +90,11 @@ export class MessageService {
     // Thông báo qua WebSocket nếu có gateway
     if (this.messageGateway) {
       this.messageGateway.notifyNewUserMessage(savedMessage);
+    }
+
+    // Phát sự kiện tin nhắn đã được tạo
+    if (this.eventService) {
+      this.eventService.emitMessageCreated(savedMessage);
     }
 
     return savedMessage;
@@ -195,6 +202,11 @@ export class MessageService {
       this.messageGateway.notifyNewUserMessage(createdMessage);
     }
 
+    // Phát sự kiện tin nhắn đã được tạo
+    if (this.eventService) {
+      this.eventService.emitMessageCreated(createdMessage);
+    }
+
     return createdMessage;
   }
 
@@ -241,6 +253,11 @@ export class MessageService {
     // Thông báo qua WebSocket nếu có gateway
     if (this.messageGateway) {
       this.messageGateway.notifyNewGroupMessage(savedMessage);
+    }
+
+    // Phát sự kiện tin nhắn đã được tạo
+    if (this.eventService) {
+      this.eventService.emitMessageCreated(savedMessage);
     }
 
     return savedMessage;
@@ -352,6 +369,11 @@ export class MessageService {
       this.messageGateway.notifyNewGroupMessage(createdMessage);
     }
 
+    // Phát sự kiện tin nhắn đã được tạo
+    if (this.eventService) {
+      this.eventService.emitMessageCreated(createdMessage);
+    }
+
     return createdMessage;
   }
 
@@ -428,11 +450,20 @@ export class MessageService {
     });
   }
 
-  async recallMessage(messageId: string, userId: string) {
-    // Check if the user is the sender of the message
-    const message = await this.prisma.message.findUnique({
+  /**
+   * Find a message by its ID
+   * @param messageId Message ID
+   * @returns Message or null if not found
+   */
+  async findMessageById(messageId: string) {
+    return this.prisma.message.findUnique({
       where: { id: messageId },
     });
+  }
+
+  async recallMessage(messageId: string, userId: string) {
+    // Check if the user is the sender of the message
+    const message = await this.findMessageById(messageId);
 
     if (!message) {
       throw new ForbiddenException('Message not found');
@@ -456,14 +487,17 @@ export class MessageService {
       this.messageGateway.notifyMessageRecalled(updatedMessage, userId);
     }
 
+    // Phát sự kiện tin nhắn đã được thu hồi
+    if (this.eventService) {
+      this.eventService.emitMessageRecalled(messageId, userId);
+    }
+
     return updatedMessage;
   }
 
   async readMessage(messageId: string, readerId: string) {
     // Verify the message exists and user has access to it
-    const message = await this.prisma.message.findUnique({
-      where: { id: messageId },
-    });
+    const message = await this.findMessageById(messageId);
 
     if (!message) {
       throw new ForbiddenException('Message not found');
@@ -508,14 +542,17 @@ export class MessageService {
       this.messageGateway.notifyMessageRead(updatedMessage, readerId);
     }
 
+    // Phát sự kiện tin nhắn đã được đọc
+    if (this.eventService) {
+      this.eventService.emitMessageRead(messageId, readerId);
+    }
+
     return updatedMessage;
   }
 
   async unreadMessage(messageId: string, readerId: string) {
     // Verify the message exists and user has access to it
-    const message = await this.prisma.message.findUnique({
-      where: { id: messageId },
-    });
+    const message = await this.findMessageById(messageId);
 
     if (!message) {
       throw new ForbiddenException('Message not found');
@@ -572,6 +609,11 @@ export class MessageService {
       this.messageGateway.notifyMessageRead(updatedMessage, readerId);
     }
 
+    // Phát sự kiện tin nhắn đã được đọc
+    if (this.eventService) {
+      this.eventService.emitMessageRead(messageId, readerId);
+    }
+
     return updatedMessage;
   }
 
@@ -580,9 +622,7 @@ export class MessageService {
     reaction.userId = userId;
 
     // Verify the message exists and user has access to it
-    const message = await this.prisma.message.findUnique({
-      where: { id: reaction.messageId },
-    });
+    const message = await this.findMessageById(reaction.messageId);
 
     if (!message) {
       throw new ForbiddenException('Message not found');
@@ -684,9 +724,7 @@ export class MessageService {
 
   async removeReaction(messageId: string, userId: string) {
     // Verify the message exists and user has access to it
-    const message = await this.prisma.message.findUnique({
-      where: { id: messageId },
-    });
+    const message = await this.findMessageById(messageId);
 
     if (!message) {
       throw new ForbiddenException('Message not found');
@@ -752,9 +790,7 @@ export class MessageService {
 
   async deleteMessageSelfSide(messageId: string, userId: string) {
     // Verify the message exists and user has access to it
-    const message = await this.prisma.message.findUnique({
-      where: { id: messageId },
-    });
+    const message = await this.findMessageById(messageId);
 
     if (!message) {
       throw new ForbiddenException('Message not found');
@@ -1344,9 +1380,7 @@ export class MessageService {
 
   async forwardMessage(forwardData: ForwardMessageDto, userId: string) {
     // Get the original message
-    const originalMessage = await this.prisma.message.findUnique({
-      where: { id: forwardData.messageId },
-    });
+    const originalMessage = await this.findMessageById(forwardData.messageId);
 
     if (!originalMessage) {
       throw new NotFoundException('Original message not found');

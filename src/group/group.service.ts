@@ -1,15 +1,33 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { Group, GroupMember, GroupRole } from '@prisma/client';
-import { CreateGroupDto, UpdateGroupDto, AddMemberDto } from './dto';
+import {
+  CreateGroupDto,
+  UpdateGroupDto,
+  AddMemberDto,
+  GroupInfoDto,
+} from './dto';
+import { GroupGateway } from './group.gateway';
+import { EventService } from '../event/event.service';
 
 @Injectable()
 export class GroupService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(GroupService.name);
+  private readonly GROUP_AVATARS_BUCKET = 'group_avatars';
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storageService: StorageService,
+    private readonly groupGateway: GroupGateway,
+    private readonly eventService: EventService,
+  ) {}
 
   async create(createGroupDto: CreateGroupDto): Promise<Group> {
     return this.prisma.group.create({
@@ -65,6 +83,35 @@ export class GroupService {
     return group;
   }
 
+  /**
+   * Get public group info by ID
+   * @param id Group ID
+   * @returns Group info
+   */
+  async getPublicGroupInfo(id: string): Promise<GroupInfoDto> {
+    const group = await this.prisma.group.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: { members: true },
+        },
+      },
+    });
+
+    if (!group) {
+      throw new NotFoundException(`Group with ID ${id} not found`);
+    }
+
+    // Return only public information
+    return {
+      id: group.id,
+      name: group.name,
+      avatarUrl: group.avatarUrl,
+      createdAt: group.createdAt,
+      memberCount: group._count.members,
+    };
+  }
+
   async update(
     id: string,
     updateGroupDto: UpdateGroupDto,
@@ -73,10 +120,23 @@ export class GroupService {
     await this.validateGroupAccess(id, requestUserId, 'update group details');
 
     try {
-      return await this.prisma.group.update({
+      const updatedGroup = await this.prisma.group.update({
         where: { id },
         data: updateGroupDto,
       });
+
+      // Thông báo qua GroupGateway
+      this.groupGateway.notifyGroupUpdated(id, {
+        groupId: id,
+        data: updateGroupDto,
+        updatedBy: requestUserId,
+        timestamp: new Date(),
+      });
+
+      // Phát sự kiện để cập nhật thông tin nhóm
+      this.eventService.emitGroupUpdated(id, updateGroupDto, requestUserId);
+
+      return updatedGroup;
     } catch (error) {
       throw new NotFoundException(`Failed to update group: ${error.message}`);
     }
@@ -130,7 +190,7 @@ export class GroupService {
       return existingMember;
     }
 
-    return this.prisma.groupMember.create({
+    const newMember = await this.prisma.groupMember.create({
       data: {
         groupId,
         userId,
@@ -146,6 +206,19 @@ export class GroupService {
         group: true,
       },
     });
+
+    // Thông báo qua GroupGateway
+    this.groupGateway.notifyMemberAdded(groupId, {
+      groupId,
+      member: newMember,
+      addedBy: addedById,
+      timestamp: new Date(),
+    });
+
+    // Phát sự kiện để MessageGateway cập nhật room
+    this.eventService.emitGroupMemberAdded(groupId, userId, addedById);
+
+    return newMember;
   }
 
   async removeMember(
@@ -161,6 +234,17 @@ export class GroupService {
         userId,
       },
     });
+
+    // Thông báo qua GroupGateway
+    this.groupGateway.notifyMemberRemoved(groupId, {
+      groupId,
+      userId,
+      removedBy: requestUserId,
+      timestamp: new Date(),
+    });
+
+    // Phát sự kiện để MessageGateway cập nhật room
+    this.eventService.emitGroupMemberRemoved(groupId, userId, requestUserId);
   }
 
   async updateMemberRole(
@@ -228,12 +312,37 @@ export class GroupService {
     }
 
     // Apply the role change
-    return this.prisma.groupMember.update({
+    const updatedMember = await this.prisma.groupMember.update({
       where: { id: targetMembership.id },
       data: { role: finalRole },
     });
+
+    // Thông báo qua GroupGateway
+    this.groupGateway.notifyRoleChanged(groupId, {
+      groupId,
+      userId,
+      role: finalRole,
+      updatedBy: requestUserId,
+      timestamp: new Date(),
+    });
+
+    // Phát sự kiện để cập nhật vai trò
+    this.eventService.emitGroupRoleChanged(
+      groupId,
+      userId,
+      finalRole.toString(),
+      requestUserId,
+    );
+
+    return updatedMember;
   }
 
+  /**
+   * Get membership ID for a user in a group
+   * @param groupId Group ID
+   * @param userId User ID
+   * @returns Membership ID
+   */
   private async getMembershipId(
     groupId: string,
     userId: string,
@@ -320,6 +429,70 @@ export class GroupService {
     };
   }
 
+  /**
+   * Join a group via link
+   * @param groupId Group ID
+   * @param userId User ID
+   * @returns Group member
+   */
+  async joinGroupViaLink(
+    groupId: string,
+    userId: string,
+  ): Promise<GroupMember> {
+    // Check if group exists
+    const group = await this.prisma.group.findUnique({
+      where: { id: groupId },
+      include: {
+        members: true,
+      },
+    });
+
+    if (!group) {
+      throw new NotFoundException(`Group with ID ${groupId} not found`);
+    }
+
+    // Check if user is already a member
+    const existingMember = group.members.find(
+      (member) => member.userId === userId,
+    );
+
+    if (existingMember) {
+      return existingMember; // User is already a member
+    }
+
+    // Add user to the group as a regular member
+    const newMember = await this.prisma.groupMember.create({
+      data: {
+        groupId,
+        userId,
+        role: GroupRole.MEMBER,
+        addedById: userId, // Self-added via link
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+          },
+        },
+        group: true,
+      },
+    });
+
+    // Thông báo qua GroupGateway
+    this.groupGateway.notifyMemberAdded(groupId, {
+      groupId,
+      member: newMember,
+      addedBy: userId,
+      joinedViaLink: true,
+      timestamp: new Date(),
+    });
+
+    // Phát sự kiện để MessageGateway cập nhật room
+    this.eventService.emitGroupMemberAdded(groupId, userId, userId);
+
+    return newMember;
+  }
+
   async leaveGroup(groupId: string, userId: string): Promise<void> {
     const group = await this.prisma.group.findUnique({
       where: { id: groupId },
@@ -355,5 +528,87 @@ export class GroupService {
         id: userMembership.id,
       },
     });
+  }
+
+  /**
+   * Update group avatar
+   * @param groupId Group ID
+   * @param file Avatar file
+   * @param requestUserId User ID making the request
+   * @returns Updated group
+   */
+  async updateGroupAvatar(
+    groupId: string,
+    file: Express.Multer.File,
+    requestUserId: string,
+  ): Promise<Group> {
+    // Validate access
+    await this.validateGroupAccess(
+      groupId,
+      requestUserId,
+      'update group avatar',
+    );
+
+    // Get group
+    const group = await this.prisma.group.findUnique({
+      where: { id: groupId },
+    });
+
+    if (!group) {
+      throw new NotFoundException(`Group with ID ${groupId} not found`);
+    }
+
+    // Check file type
+    if (!file.mimetype.startsWith('image/')) {
+      throw new BadRequestException(
+        'Only image files are allowed for group avatars',
+      );
+    }
+
+    // Delete old avatar if exists
+    if (group.avatarUrl) {
+      try {
+        const oldPath = new URL(group.avatarUrl).pathname.split('/').pop();
+        if (oldPath) {
+          await this.storageService.deleteFile(
+            oldPath,
+            this.GROUP_AVATARS_BUCKET,
+          );
+        }
+      } catch (error) {
+        // Log but continue
+        this.logger.warn(`Failed to delete old group avatar: ${error.message}`);
+      }
+    }
+
+    // Upload new avatar
+    const [uploadedFile] = await this.storageService.uploadFiles(
+      [file],
+      this.GROUP_AVATARS_BUCKET,
+      groupId,
+    );
+
+    // Update group with new avatar URL
+    const updatedGroup = await this.prisma.group.update({
+      where: { id: groupId },
+      data: { avatarUrl: uploadedFile.url },
+    });
+
+    // Notify group members about the avatar update
+    this.groupGateway.notifyAvatarUpdated(groupId, {
+      groupId,
+      avatarUrl: uploadedFile.url,
+      updatedBy: requestUserId,
+      timestamp: new Date(),
+    });
+
+    // Phát sự kiện để cập nhật ảnh đại diện nhóm
+    this.eventService.emitGroupAvatarUpdated(
+      groupId,
+      uploadedFile.url,
+      requestUserId,
+    );
+
+    return updatedGroup;
   }
 }

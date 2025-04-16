@@ -18,6 +18,7 @@ import {
 } from '@nestjs/common';
 
 import { MessageService } from './message.service';
+import { EventService } from '../event/event.service';
 
 // Interface cho tin nhắn với các trường cần thiết
 type MessageData = {
@@ -62,7 +63,28 @@ export class MessageGateway
   constructor(
     @Inject(forwardRef(() => MessageService))
     private readonly messageService?: MessageService,
-  ) {}
+    private readonly eventService?: EventService,
+  ) {
+    // Lắng nghe sự kiện từ EventService
+    if (this.eventService) {
+      this.eventService.eventEmitter.on(
+        'group.member.added',
+        this.handleGroupMemberAdded.bind(this),
+      );
+      this.eventService.eventEmitter.on(
+        'group.member.removed',
+        this.handleGroupMemberRemoved.bind(this),
+      );
+      this.eventService.eventEmitter.on(
+        'message.recalled',
+        this.handleMessageRecalled.bind(this),
+      );
+      this.eventService.eventEmitter.on(
+        'message.read',
+        this.handleMessageRead.bind(this),
+      );
+    }
+  }
 
   private async getUserFromSocket(client: Socket): Promise<string> {
     // Đơn giản hóa: lấy userId từ query parameter hoặc sử dụng một giá trị mặc định
@@ -465,6 +487,98 @@ export class MessageGateway
         type: 'group',
         message,
         timestamp: new Date(),
+      });
+    }
+  }
+
+  /**
+   * Xử lý sự kiện thêm thành viên vào nhóm
+   * @param payload Dữ liệu sự kiện
+   */
+  private handleGroupMemberAdded(payload: {
+    groupId: string;
+    userId: string;
+    addedById: string;
+  }): void {
+    const { groupId, userId } = payload;
+    this.logger.debug(
+      `Handling group.member.added event: ${groupId}, ${userId}`,
+    );
+
+    // Tìm tất cả socket của người dùng và thêm vào phòng nhóm
+    const userSockets = this.userSockets.get(userId);
+    if (userSockets) {
+      for (const socket of userSockets) {
+        socket.join(`group:${groupId}`);
+      }
+      this.logger.debug(
+        `User ${userId} joined group room ${groupId} via event`,
+      );
+    }
+  }
+
+  /**
+   * Xử lý sự kiện xóa thành viên khỏi nhóm
+   * @param payload Dữ liệu sự kiện
+   */
+  private handleGroupMemberRemoved(payload: {
+    groupId: string;
+    userId: string;
+    removedById: string;
+  }): void {
+    const { groupId, userId } = payload;
+    this.logger.debug(
+      `Handling group.member.removed event: ${groupId}, ${userId}`,
+    );
+
+    // Tìm tất cả socket của người dùng và xóa khỏi phòng nhóm
+    const userSockets = this.userSockets.get(userId);
+    if (userSockets) {
+      for (const socket of userSockets) {
+        socket.leave(`group:${groupId}`);
+      }
+      this.logger.debug(`User ${userId} left group room ${groupId} via event`);
+    }
+  }
+
+  /**
+   * Xử lý sự kiện thu hồi tin nhắn
+   * @param payload Dữ liệu sự kiện
+   */
+  private handleMessageRecalled(payload: {
+    messageId: string;
+    userId: string;
+  }): void {
+    const { messageId, userId } = payload;
+    this.logger.debug(`Handling message.recalled event: ${messageId}`);
+
+    // Lấy thông tin tin nhắn từ database
+    if (this.messageService) {
+      this.messageService.findMessageById(messageId).then((message) => {
+        if (message) {
+          this.notifyMessageRecalled(message, userId);
+        }
+      });
+    }
+  }
+
+  /**
+   * Xử lý sự kiện đọc tin nhắn
+   * @param payload Dữ liệu sự kiện
+   */
+  private handleMessageRead(payload: {
+    messageId: string;
+    userId: string;
+  }): void {
+    const { messageId, userId } = payload;
+    this.logger.debug(`Handling message.read event: ${messageId}`);
+
+    // Lấy thông tin tin nhắn từ database
+    if (this.messageService) {
+      this.messageService.findMessageById(messageId).then((message) => {
+        if (message) {
+          this.notifyMessageRead(message, userId);
+        }
       });
     }
   }
