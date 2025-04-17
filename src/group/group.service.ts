@@ -20,7 +20,7 @@ import { EventService } from '../event/event.service';
 @Injectable()
 export class GroupService {
   private readonly logger = new Logger(GroupService.name);
-  private readonly GROUP_AVATARS_BUCKET = 'group_avatars';
+  private readonly GROUP_AVATARS_BUCKET = 'group-avatars';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -30,7 +30,8 @@ export class GroupService {
   ) {}
 
   async create(createGroupDto: CreateGroupDto): Promise<Group> {
-    return this.prisma.group.create({
+    // Tạo nhóm với người tạo là thành viên đầu tiên (LEADER)
+    const group = await this.prisma.group.create({
       data: {
         name: createGroupDto.name,
         creatorId: createGroupDto.creatorId,
@@ -47,6 +48,62 @@ export class GroupService {
         members: true,
       },
     });
+
+    // Thêm các thành viên ban đầu vào nhóm
+    if (
+      createGroupDto.initialMembers &&
+      createGroupDto.initialMembers.length > 0
+    ) {
+      const memberCreations = createGroupDto.initialMembers.map((member) => {
+        return this.prisma.groupMember.create({
+          data: {
+            groupId: group.id,
+            userId: member.userId,
+            role: GroupRole.MEMBER,
+            addedById: member.addedById || createGroupDto.creatorId,
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+              },
+            },
+          },
+        });
+      });
+
+      // Thực hiện tạo tất cả các thành viên cùng lúc
+      await Promise.all(memberCreations);
+
+      // Lấy lại nhóm với danh sách thành viên đã cập nhật
+      const updatedGroup = await this.prisma.group.findUnique({
+        where: { id: group.id },
+        include: {
+          members: true,
+        },
+      });
+
+      // Thông báo qua GroupGateway cho mỗi thành viên được thêm vào
+      for (const member of createGroupDto.initialMembers) {
+        this.groupGateway.notifyMemberAdded(group.id, {
+          groupId: group.id,
+          member: { userId: member.userId, groupId: group.id } as any,
+          addedBy: member.addedById || createGroupDto.creatorId,
+          timestamp: new Date(),
+        });
+
+        // Phát sự kiện để MessageGateway cập nhật room
+        this.eventService.emitGroupMemberAdded(
+          group.id,
+          member.userId,
+          member.addedById || createGroupDto.creatorId,
+        );
+      }
+
+      return updatedGroup;
+    }
+
+    return group;
   }
 
   async findAll(): Promise<Group[]> {
