@@ -93,7 +93,7 @@ export class FriendService {
           });
 
           // Tạo mới mối quan hệ với vai trò đảo ngược
-          return this.prisma.friend.create({
+          const newRequest = await this.prisma.friend.create({
             data: {
               senderId,
               receiverId,
@@ -129,9 +129,14 @@ export class FriendService {
               },
             },
           });
+
+          // Emit reload event to both users when creating a new request after role reversal
+          this.friendGateway.emitReloadEvent(senderId, receiverId);
+
+          return newRequest;
         } else {
           // Nếu người gửi hiện tại vẫn là người gửi trước đó, chỉ cập nhật trạng thái
-          return this.prisma.friend.update({
+          const updatedRequest = await this.prisma.friend.update({
             where: { id: existingFriendship.id },
             data: {
               status: FriendStatus.PENDING,
@@ -167,6 +172,11 @@ export class FriendService {
               },
             },
           });
+
+          // Emit reload event to both users when updating from DECLINED to PENDING
+          this.friendGateway.emitReloadEvent(senderId, receiverId);
+
+          return updatedRequest;
         }
       }
 

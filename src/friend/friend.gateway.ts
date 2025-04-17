@@ -92,6 +92,24 @@ export class FriendGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(`user:${senderId}`).emit('reload');
     this.server.to(`user:${receiverId}`).emit('reload');
 
+    // Log detailed information for debugging
+    this.logger.debug(`Emitting reload event to users ${senderId} and ${receiverId}`);
+    this.logger.debug(`Active user sockets: ${this.userSockets.size}`);
+
+    // Also try to emit directly to the sockets if they exist
+    const senderSockets = this.userSockets.get(senderId);
+    const receiverSockets = this.userSockets.get(receiverId);
+
+    if (senderSockets && senderSockets.size > 0) {
+      senderSockets.forEach(socket => socket.emit('reload'));
+      this.logger.debug(`Emitted directly to ${senderSockets.size} sender sockets`);
+    }
+
+    if (receiverSockets && receiverSockets.size > 0) {
+      receiverSockets.forEach(socket => socket.emit('reload'));
+      this.logger.debug(`Emitted directly to ${receiverSockets.size} receiver sockets`);
+    }
+
     this.logger.log(
       `Emitted reload event to users ${senderId} and ${receiverId}`,
     );
