@@ -1275,43 +1275,67 @@ export class MessageService {
     // Tạo danh sách cuộc trò chuyện nhóm
     const groupConversationMap = new Map();
 
+    // Đầu tiên, thêm tất cả các nhóm mà người dùng tham gia vào map
+    // Điều này đảm bảo rằng tất cả các nhóm đều được hiển thị, kể cả khi chưa có tin nhắn
+    for (const groupMember of userGroups) {
+      const group = groupMember.group;
+      if (!group) continue;
+
+      // Thêm nhóm vào map nếu chưa có
+      if (!groupConversationMap.has(group.id)) {
+        groupConversationMap.set(group.id, {
+          id: group.id,
+          type: 'GROUP',
+          group: {
+            id: group.id,
+            name: group.name || 'Unknown Group',
+            avatarUrl: group.avatarUrl,
+          },
+          // Không có tin nhắn cuối cùng
+          lastMessage: null,
+          unreadCount: 0,
+          // Sử dụng ngày tạo nhóm làm thời gian cập nhật nếu không có tin nhắn
+          updatedAt: group.createdAt,
+        });
+      }
+    }
+
+    // Sau đó, cập nhật thông tin tin nhắn cuối cùng cho các nhóm có tin nhắn
     for (const message of groupMessages) {
       if (!message.groupId) continue;
 
-      // Nếu chưa có cuộc trò chuyện với nhóm này, tạo mới
-      if (!groupConversationMap.has(message.groupId)) {
-        // Lấy thông tin nhóm
-        const group = await this.prisma.group.findUnique({
-          where: { id: message.groupId },
-        });
+      // Lấy thông tin cuộc trò chuyện nhóm từ map
+      const conversation = groupConversationMap.get(message.groupId);
 
-        groupConversationMap.set(message.groupId, {
-          id: message.groupId,
-          type: 'GROUP',
-          group: {
-            id: message.groupId,
-            name: group?.name || 'Unknown Group',
-            avatarUrl: group?.avatarUrl,
-          },
-          lastMessage: {
-            id: message.id,
-            content: message.content,
-            senderId: message.senderId,
-            senderName: await this.getSenderName(message.senderId),
-            createdAt: message.createdAt,
-            recalled: message.recalled,
-            isRead:
-              (Array.isArray(message.readBy) &&
-                message.readBy.includes(userId)) ||
-              false,
-          },
-          unreadCount: !(
-            Array.isArray(message.readBy) && message.readBy.includes(userId)
-          )
-            ? 1
-            : 0,
-          updatedAt: message.createdAt,
-        });
+      // Nếu đây là tin nhắn đầu tiên được xử lý cho nhóm này hoặc tin nhắn này mới hơn
+      if (
+        !conversation.lastMessage ||
+        new Date(message.createdAt) >
+          new Date(conversation.lastMessage.createdAt)
+      ) {
+        // Cập nhật thông tin tin nhắn cuối cùng
+        conversation.lastMessage = {
+          id: message.id,
+          content: message.content,
+          senderId: message.senderId,
+          senderName: await this.getSenderName(message.senderId),
+          createdAt: message.createdAt,
+          recalled: message.recalled,
+          isRead:
+            (Array.isArray(message.readBy) &&
+              message.readBy.includes(userId)) ||
+            false,
+        };
+
+        // Cập nhật thời gian cập nhật cuộc trò chuyện
+        conversation.updatedAt = message.createdAt;
+
+        // Cập nhật số tin nhắn chưa đọc
+        if (
+          !(Array.isArray(message.readBy) && message.readBy.includes(userId))
+        ) {
+          conversation.unreadCount += 1;
+        }
       }
     }
 
@@ -1337,6 +1361,23 @@ export class MessageService {
           content: conv.lastMessage?.content,
           senderId: conv.lastMessage?.senderId,
         },
+      });
+    });
+
+    // In ra chi tiết các cuộc trò chuyện nhóm để kiểm tra
+    groupConversations.forEach((conv, index) => {
+      console.log(`Group conversation ${index + 1}:`, {
+        id: conv.id,
+        type: conv.type,
+        group: conv.group,
+        lastMessage: conv.lastMessage
+          ? {
+              id: conv.lastMessage?.id,
+              content: conv.lastMessage?.content,
+              senderId: conv.lastMessage?.senderId,
+            }
+          : 'No messages',
+        updatedAt: conv.updatedAt,
       });
     });
 

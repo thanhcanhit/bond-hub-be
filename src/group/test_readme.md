@@ -196,6 +196,27 @@ enum GroupRole {
 4. GroupService lưu trữ URL ảnh đại diện trong database
 5. Sau khi tạo nhóm, file ảnh được chuyển từ thư mục tạm sang thư mục chính với ID nhóm
 
+#### Cách gửi dữ liệu form data để tạo nhóm với ảnh đại diện:
+
+```
+POST /api/v1/groups
+Content-Type: multipart/form-data
+
+- name: "Tên nhóm"
+- creatorId: "user-id-123"
+- initialMembers: "[{\"userId\":\"user-id-456\",\"addedById\":\"user-id-123\"},{\"userId\":\"user-id-789\",\"addedById\":\"user-id-123\"}]"
+- file: [file binary data]
+```
+
+**Lưu ý quan trọng**:
+- Trường `initialMembers` phải được gửi dưới dạng chuỗi JSON, không phải mảng đối tượng. Backend sẽ tự động chuyển đổi chuỗi JSON này thành mảng đối tượng.
+- Nhóm phải có ít nhất 2 thành viên bổ sung (tổng cộng 3 người bao gồm người tạo).
+- Trường `file` là tùy chọn, nếu không có file, nhóm sẽ được tạo mà không có ảnh đại diện.
+
+**Xử lý lỗi**:
+- Nếu chuỗi JSON không hợp lệ, hệ thống sẽ trả về lỗi "Invalid initialMembers format".
+- Nếu không có trường initialMembers, hệ thống sẽ trả về lỗi "initialMembers is required".
+
 #### Khi cập nhật ảnh đại diện nhóm:
 1. GroupController nhận file upload qua `FileInterceptor('file')`
 2. GroupService gọi `updateGroupAvatar()`
@@ -233,3 +254,5 @@ Khi có thay đổi từ backend (ví dụ: cập nhật ảnh đại diện nh�
 - 1.0.0: Phiên bản ban đầu
 - 1.1.0: Thêm tính năng tham gia nhóm qua link
 - 1.2.0: Hỗ trợ upload ảnh đại diện khi tạo nhóm
+- 1.2.1: Sửa lỗi xử lý form data khi tạo nhóm với ảnh đại diện
+- 1.2.2: Cải tiến xử lý form data trong controller để tạo nhóm với ảnh đại diện

@@ -12,6 +12,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { GroupService } from './group.service';
@@ -32,13 +33,34 @@ export class GroupController {
 
   @Post()
   @UseInterceptors(FileInterceptor('file'))
-  create(
-    @Body() createGroupDto: CreateGroupDto,
+  async create(
+    @Body() body: Record<string, any>,
     @UploadedFile() file: Express.Multer.File,
   ) {
+    // Tạo đối tượng DTO từ dữ liệu form
+    const createGroupDto = new CreateGroupDto();
+    createGroupDto.name = body.name;
+    createGroupDto.creatorId = body.creatorId;
+    createGroupDto.avatarUrl = body.avatarUrl;
+
+    // Xử lý trường initialMembers
+    if (typeof body.initialMembers === 'string') {
+      try {
+        createGroupDto.initialMembers = JSON.parse(body.initialMembers);
+      } catch (error) {
+        this.logger.error(`Failed to parse initialMembers: ${error.message}`);
+        throw new BadRequestException('Invalid initialMembers format');
+      }
+    } else if (Array.isArray(body.initialMembers)) {
+      createGroupDto.initialMembers = body.initialMembers;
+    } else {
+      throw new BadRequestException('initialMembers is required');
+    }
+
     this.logger.log(
-      `Create group request - Name: ${createGroupDto.name}, CreatorId: ${createGroupDto.creatorId}, FileSize: ${file?.size || 'N/A'}`,
+      `Create group request - Name: ${createGroupDto.name}, CreatorId: ${createGroupDto.creatorId}, FileSize: ${file?.size || 'N/A'}, InitialMembers: ${JSON.stringify(createGroupDto.initialMembers)}`,
     );
+
     return this.groupService.create(createGroupDto, file);
   }
 
