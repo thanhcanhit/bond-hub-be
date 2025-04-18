@@ -142,7 +142,7 @@
       "name": "Group Management",
       "item": [
         {
-          "name": "Create Group",
+          "name": "Create Group with Avatar",
           "event": [
             {
               "listen": "test",
@@ -156,6 +156,10 @@
                   "pm.test(\"Group created successfully\", function () {",
                   "    pm.expect(jsonData.name).to.eql(\"Nhóm Test Postman\");",
                   "    pm.expect(jsonData.creatorId).to.eql(pm.collectionVariables.get(\"userId\"));",
+                  "    // Kiểm tra avatarUrl nếu có upload file",
+                  "    if (pm.request.body.mode === 'formdata' && pm.request.body.formdata.find(item => item.key === 'file' && item.value)) {",
+                  "        pm.expect(jsonData.avatarUrl).to.exist;",
+                  "    }",
                   "});",
                   "pm.test(\"Group has initial members\", function () {",
                   "    pm.expect(jsonData.members).to.be.an('array');",
@@ -184,6 +188,75 @@
             "method": "POST",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Nhóm Test Postman",
+                  "type": "text"
+                },
+                {
+                  "key": "creatorId",
+                  "value": "{{userId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "initialMembers",
+                  "value": "[{\"userId\":\"{{userId2}}\",\"addedById\":\"{{userId}}\"},{\"userId\":\"{{userId3}}\",\"addedById\":\"{{userId}}\"}]",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "/path/to/your/image.jpg",
+                  "description": "Ảnh đại diện nhóm (JPG, PNG)"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "groups"]
+            },
+            "description": "Tạo một nhóm mới với người tạo là User 1, các thành viên ban đầu được gán sẵn từ file seed.ts, và có thể upload ảnh đại diện trực tiếp"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Group without Avatar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.collectionVariables.set(\"groupId\", jsonData.id);",
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Group created successfully\", function () {",
+                  "    pm.expect(jsonData.name).to.eql(\"Nhóm Test Postman Không Có Avatar\");",
+                  "    pm.expect(jsonData.creatorId).to.eql(pm.collectionVariables.get(\"userId\"));",
+                  "    pm.expect(jsonData.avatarUrl).to.be.null;",
+                  "});",
+                  "pm.test(\"Group has initial members\", function () {",
+                  "    pm.expect(jsonData.members).to.be.an('array');",
+                  "    pm.expect(jsonData.members.length).to.be.at.least(3); // Creator + 2 initial members",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               },
@@ -194,14 +267,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"name\": \"Nhóm Test Postman\",\n    \"creatorId\": \"{{userId}}\",\n    \"avatarUrl\": null,\n    \"initialMembers\": [\n        {\n            \"userId\": \"{{userId2}}\",\n            \"addedById\": \"{{userId}}\"\n        },\n        {\n            \"userId\": \"{{userId3}}\",\n            \"addedById\": \"{{userId}}\"\n        }\n    ]\n}"
+              "raw": "{\n    \"name\": \"Nhóm Test Postman Không Có Avatar\",\n    \"creatorId\": \"{{userId}}\",\n    \"avatarUrl\": null,\n    \"initialMembers\": [\n        {\n            \"userId\": \"{{userId2}}\",\n            \"addedById\": \"{{userId}}\"\n        },\n        {\n            \"userId\": \"{{userId3}}\",\n            \"addedById\": \"{{userId}}\"\n        }\n    ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/groups",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "groups"]
             },
-            "description": "Tạo một nhóm mới với người tạo là User 1 và các thành viên ban đầu được gán sẵn từ file seed.ts"
+            "description": "Tạo một nhóm mới với người tạo là User 1 và các thành viên ban đầu được gán sẵn từ file seed.ts, không có ảnh đại diện"
           },
           "response": []
         },

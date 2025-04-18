@@ -31,8 +31,15 @@ export class GroupController {
   constructor(private readonly groupService: GroupService) {}
 
   @Post()
-  create(@Body() createGroupDto: CreateGroupDto) {
-    return this.groupService.create(createGroupDto);
+  @UseInterceptors(FileInterceptor('file'))
+  create(
+    @Body() createGroupDto: CreateGroupDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    this.logger.log(
+      `Create group request - Name: ${createGroupDto.name}, CreatorId: ${createGroupDto.creatorId}, FileSize: ${file?.size || 'N/A'}`,
+    );
+    return this.groupService.create(createGroupDto, file);
   }
 
   @Get('user')

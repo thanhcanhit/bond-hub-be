@@ -64,7 +64,7 @@ enum GroupRole {
 
 | Method | Endpoint | Mô tả | Quyền hạn |
 |--------|----------|-------|-----------|
-| POST | `/groups` | Tạo nhóm mới | Đã xác thực |
+| POST | `/groups` | Tạo nhóm mới (hỗ trợ upload ảnh đại diện) | Đã xác thực |
 | GET | `/groups/:id` | Lấy thông tin nhóm | Thành viên nhóm |
 | GET | `/groups/:id/info` | Lấy thông tin công khai của nhóm | Không yêu cầu xác thực |
 | PATCH | `/groups/:id` | Cập nhật thông tin nhóm | Leader hoặc Co-leader |
@@ -189,10 +189,17 @@ enum GroupRole {
 
 ### Tương tác với Storage Module
 
+#### Khi tạo nhóm với ảnh đại diện:
+1. GroupController nhận file upload qua `FileInterceptor('file')`
+2. GroupService gọi `create()` với file ảnh được truyền vào
+3. GroupService sử dụng StorageService để upload file vào bucket `group-avatars`
+4. GroupService lưu trữ URL ảnh đại diện trong database
+5. Sau khi tạo nhóm, file ảnh được chuyển từ thư mục tạm sang thư mục chính với ID nhóm
+
 #### Khi cập nhật ảnh đại diện nhóm:
-1. GroupController nhận file upload
+1. GroupController nhận file upload qua `FileInterceptor('file')`
 2. GroupService gọi `updateGroupAvatar()`
-3. GroupService sử dụng StorageService để upload file vào bucket `group_avatars`
+3. GroupService sử dụng StorageService để upload file vào bucket `group-avatars`
 4. GroupService cập nhật URL ảnh đại diện trong database
 5. GroupService thông báo qua GroupGateway và phát sự kiện
 
@@ -225,3 +232,4 @@ Khi có thay đổi từ backend (ví dụ: cập nhật ảnh đại diện nh�
 
 - 1.0.0: Phiên bản ban đầu
 - 1.1.0: Thêm tính năng tham gia nhóm qua link
+- 1.2.0: Hỗ trợ upload ảnh đại diện khi tạo nhóm

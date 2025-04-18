@@ -29,13 +29,45 @@ export class GroupService {
     private readonly eventService: EventService,
   ) {}
 
-  async create(createGroupDto: CreateGroupDto): Promise<Group> {
+  async create(
+    createGroupDto: CreateGroupDto,
+    file?: Express.Multer.File,
+  ): Promise<Group> {
+    let avatarUrl = createGroupDto.avatarUrl;
+
+    // Upload avatar file if provided
+    if (file) {
+      // Check file type
+      if (!file.mimetype.startsWith('image/')) {
+        throw new BadRequestException(
+          'Only image files are allowed for group avatars',
+        );
+      }
+
+      try {
+        // Upload the file
+        const [fileData] = await this.storageService.uploadFiles(
+          [file],
+          this.GROUP_AVATARS_BUCKET,
+          'temp',
+        );
+
+        // Use the uploaded file URL
+        avatarUrl = fileData.url;
+      } catch (error) {
+        this.logger.error(`Failed to upload group avatar: ${error.message}`);
+        throw new BadRequestException(
+          `Failed to upload group avatar: ${error.message}`,
+        );
+      }
+    }
+
     // Tạo nhóm với người tạo là thành viên đầu tiên (LEADER)
     const group = await this.prisma.group.create({
       data: {
         name: createGroupDto.name,
         creatorId: createGroupDto.creatorId,
-        avatarUrl: createGroupDto.avatarUrl,
+        avatarUrl: avatarUrl,
         members: {
           create: {
             userId: createGroupDto.creatorId,
@@ -48,6 +80,53 @@ export class GroupService {
         members: true,
       },
     });
+
+    // If we uploaded a file, move it to the correct folder with the group ID
+    if (file && group.id && avatarUrl) {
+      try {
+        // Extract the filename from the URL
+        const fileName = new URL(avatarUrl).pathname.split('/').pop();
+        if (!fileName) {
+          throw new Error('Failed to extract filename from URL');
+        }
+
+        // Create a new path with the group ID
+        const newPath = `${group.id}/${fileName}`;
+
+        // Get the file from the temp location
+        const tempPath = `temp/${fileName}`;
+
+        // Upload the file to the new location
+        const [newFile] = await this.storageService.uploadFiles(
+          [file],
+          this.GROUP_AVATARS_BUCKET,
+          group.id,
+        );
+
+        // Update the group with the new avatar URL
+        await this.prisma.group.update({
+          where: { id: group.id },
+          data: { avatarUrl: newFile.url },
+        });
+
+        // Update the group object with the new URL
+        group.avatarUrl = newFile.url;
+
+        // Delete the temporary file
+        try {
+          await this.storageService.deleteFile(
+            tempPath,
+            this.GROUP_AVATARS_BUCKET,
+          );
+        } catch (error) {
+          // Just log the error, don't fail the operation
+          this.logger.warn(`Failed to delete temporary file: ${error.message}`);
+        }
+      } catch (error) {
+        this.logger.error(`Failed to move group avatar: ${error.message}`);
+        // Don't throw an error here, we already have the group created
+      }
+    }
 
     // Thêm các thành viên ban đầu vào nhóm
     if (
