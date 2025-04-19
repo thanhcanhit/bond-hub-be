@@ -193,18 +193,20 @@ export class GroupService {
     });
   }
 
-  async findOne(id: string): Promise<Group> {
+  async findOne(id: string): Promise<any> {
     const group = await this.prisma.group.findUnique({
       where: { id },
       include: {
         members: {
           include: {
             user: {
-              select: {
-                id: true,
-                // Include only fields that exist on the User model
-                // username, email, and avatarUrl should be checked against your schema
-                // and adjusted accordingly
+              include: {
+                userInfo: true,
+              },
+            },
+            addedBy: {
+              include: {
+                userInfo: true,
               },
             },
           },
@@ -216,7 +218,26 @@ export class GroupService {
       throw new NotFoundException(`Group with ID ${id} not found`);
     }
 
-    return group;
+    // Chuyển đổi dữ liệu trước khi trả về
+    const formattedGroup = {
+      ...group,
+      members: group.members.map((member) => ({
+        id: member.id,
+        groupId: member.groupId,
+        userId: member.userId,
+        role: member.role,
+        fullName: member.user?.userInfo?.fullName,
+        profilePictureUrl: member.user?.userInfo?.profilePictureUrl,
+        addedBy: member.addedById
+          ? {
+              id: member.addedById,
+              fullName: member.addedBy?.userInfo?.fullName,
+            }
+          : null,
+      })),
+    };
+
+    return formattedGroup;
   }
 
   /**
@@ -296,8 +317,8 @@ export class GroupService {
     }
   }
 
-  async findUserGroups(userId: string): Promise<Group[]> {
-    return this.prisma.group.findMany({
+  async findUserGroups(userId: string): Promise<any[]> {
+    const groups = await this.prisma.group.findMany({
       where: {
         members: {
           some: {
@@ -306,12 +327,44 @@ export class GroupService {
         },
       },
       include: {
-        members: true,
+        members: {
+          include: {
+            user: {
+              include: {
+                userInfo: true,
+              },
+            },
+            addedBy: {
+              include: {
+                userInfo: true,
+              },
+            },
+          },
+        },
       },
     });
+
+    // Chuyển đổi dữ liệu trước khi trả về
+    return groups.map((group) => ({
+      ...group,
+      members: group.members.map((member) => ({
+        id: member.id,
+        groupId: member.groupId,
+        userId: member.userId,
+        role: member.role,
+        fullName: member.user?.userInfo?.fullName,
+        profilePictureUrl: member.user?.userInfo?.profilePictureUrl,
+        addedBy: member.addedById
+          ? {
+              id: member.addedById,
+              fullName: member.addedBy?.userInfo?.fullName,
+            }
+          : null,
+      })),
+    }));
   }
 
-  async addMember(addMemberDto: AddMemberDto): Promise<GroupMember> {
+  async addMember(addMemberDto: AddMemberDto): Promise<any> {
     const { groupId, userId, addedById, role } = addMemberDto;
 
     // Check if user is already a member
@@ -320,10 +373,36 @@ export class GroupService {
         groupId,
         userId,
       },
+      include: {
+        user: {
+          include: {
+            userInfo: true,
+          },
+        },
+        addedBy: {
+          include: {
+            userInfo: true,
+          },
+        },
+      },
     });
 
     if (existingMember) {
-      return existingMember;
+      // Format existing member before returning
+      return {
+        id: existingMember.id,
+        groupId: existingMember.groupId,
+        userId: existingMember.userId,
+        role: existingMember.role,
+        fullName: existingMember.user?.userInfo?.fullName,
+        profilePictureUrl: existingMember.user?.userInfo?.profilePictureUrl,
+        addedBy: existingMember.addedById
+          ? {
+              id: existingMember.addedById,
+              fullName: existingMember.addedBy?.userInfo?.fullName,
+            }
+          : null,
+      };
     }
 
     const newMember = await this.prisma.groupMember.create({
@@ -335,18 +414,39 @@ export class GroupService {
       },
       include: {
         user: {
-          select: {
-            id: true,
+          include: {
+            userInfo: true,
+          },
+        },
+        addedBy: {
+          include: {
+            userInfo: true,
           },
         },
         group: true,
       },
     });
 
+    // Format new member before returning
+    const formattedMember = {
+      id: newMember.id,
+      groupId: newMember.groupId,
+      userId: newMember.userId,
+      role: newMember.role,
+      fullName: newMember.user?.userInfo?.fullName,
+      profilePictureUrl: newMember.user?.userInfo?.profilePictureUrl,
+      addedBy: addedById
+        ? {
+            id: addedById,
+            fullName: newMember.addedBy?.userInfo?.fullName,
+          }
+        : null,
+    };
+
     // Thông báo qua GroupGateway
     this.groupGateway.notifyMemberAdded(groupId, {
       groupId,
-      member: newMember,
+      member: formattedMember,
       addedBy: addedById,
       timestamp: new Date(),
     });
@@ -354,7 +454,7 @@ export class GroupService {
     // Phát sự kiện để MessageGateway cập nhật room
     this.eventService.emitGroupMemberAdded(groupId, userId, addedById);
 
-    return newMember;
+    return formattedMember;
   }
 
   async removeMember(
@@ -571,15 +671,25 @@ export class GroupService {
    * @param userId User ID
    * @returns Group member
    */
-  async joinGroupViaLink(
-    groupId: string,
-    userId: string,
-  ): Promise<GroupMember> {
+  async joinGroupViaLink(groupId: string, userId: string): Promise<any> {
     // Check if group exists
     const group = await this.prisma.group.findUnique({
       where: { id: groupId },
       include: {
-        members: true,
+        members: {
+          include: {
+            user: {
+              include: {
+                userInfo: true,
+              },
+            },
+            addedBy: {
+              include: {
+                userInfo: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -593,7 +703,21 @@ export class GroupService {
     );
 
     if (existingMember) {
-      return existingMember; // User is already a member
+      // Format existing member before returning
+      return {
+        id: existingMember.id,
+        groupId: existingMember.groupId,
+        userId: existingMember.userId,
+        role: existingMember.role,
+        fullName: existingMember.user?.userInfo?.fullName,
+        profilePictureUrl: existingMember.user?.userInfo?.profilePictureUrl,
+        addedBy: existingMember.addedById
+          ? {
+              id: existingMember.addedById,
+              fullName: existingMember.addedBy?.userInfo?.fullName,
+            }
+          : null,
+      };
     }
 
     // Add user to the group as a regular member
@@ -606,18 +730,29 @@ export class GroupService {
       },
       include: {
         user: {
-          select: {
-            id: true,
+          include: {
+            userInfo: true,
           },
         },
         group: true,
       },
     });
 
+    // Format new member before returning
+    const formattedMember = {
+      id: newMember.id,
+      groupId: newMember.groupId,
+      userId: newMember.userId,
+      role: newMember.role,
+      fullName: newMember.user?.userInfo?.fullName,
+      profilePictureUrl: newMember.user?.userInfo?.profilePictureUrl,
+      addedBy: null, // Self-added via link, so no addedBy
+    };
+
     // Thông báo qua GroupGateway
     this.groupGateway.notifyMemberAdded(groupId, {
       groupId,
-      member: newMember,
+      member: formattedMember,
       addedBy: userId,
       joinedViaLink: true,
       timestamp: new Date(),
@@ -626,7 +761,7 @@ export class GroupService {
     // Phát sự kiện để MessageGateway cập nhật room
     this.eventService.emitGroupMemberAdded(groupId, userId, userId);
 
-    return newMember;
+    return formattedMember;
   }
 
   async leaveGroup(groupId: string, userId: string): Promise<void> {

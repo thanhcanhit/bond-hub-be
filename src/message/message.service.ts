@@ -1200,6 +1200,11 @@ export class MessageService {
                     userInfo: true,
                   },
                 },
+                addedBy: {
+                  include: {
+                    userInfo: true,
+                  },
+                },
               },
             },
           },
@@ -1301,9 +1306,18 @@ export class MessageService {
           return {
             id: member.id,
             userId: member.userId,
+            role: member.role,
             fullName: userInfo?.fullName || 'Unknown User',
             profilePictureUrl: userInfo?.profilePictureUrl,
-            role: member.role,
+            addedBy: member.addedById
+              ? {
+                  id: member.addedById,
+                  fullName: this.findMemberNameById(
+                    group.members,
+                    member.addedById,
+                  ),
+                }
+              : null,
           };
         });
 
@@ -1442,6 +1456,19 @@ export class MessageService {
     });
 
     return user?.userInfo?.fullName || 'Unknown User';
+  }
+
+  /**
+   * Helper method to find member name by ID from a list of members
+   * @param members List of group members
+   * @param memberId Member ID to find
+   * @returns Member name or 'Unknown User' if not found
+   */
+  private findMemberNameById(members: any[], memberId: string): string {
+    if (!memberId || !members || !Array.isArray(members)) return 'Unknown User';
+
+    const member = members.find((m) => m.userId === memberId);
+    return member?.user?.userInfo?.fullName || 'Unknown User';
   }
 
   async forwardMessage(forwardData: ForwardMessageDto, userId: string) {
