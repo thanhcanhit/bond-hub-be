@@ -1191,7 +1191,19 @@ export class MessageService {
         userId,
       },
       include: {
-        group: true,
+        group: {
+          include: {
+            members: {
+              include: {
+                user: {
+                  include: {
+                    userInfo: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -1283,6 +1295,18 @@ export class MessageService {
 
       // Thêm nhóm vào map nếu chưa có
       if (!groupConversationMap.has(group.id)) {
+        // Xử lý thông tin thành viên
+        const members = group.members.map((member) => {
+          const userInfo = member.user?.userInfo;
+          return {
+            id: member.id,
+            userId: member.userId,
+            fullName: userInfo?.fullName || 'Unknown User',
+            profilePictureUrl: userInfo?.profilePictureUrl,
+            role: member.role,
+          };
+        });
+
         groupConversationMap.set(group.id, {
           id: group.id,
           type: 'GROUP',
@@ -1290,6 +1314,7 @@ export class MessageService {
             id: group.id,
             name: group.name || 'Unknown Group',
             avatarUrl: group.avatarUrl,
+            members: members,
           },
           // Không có tin nhắn cuối cùng
           lastMessage: null,

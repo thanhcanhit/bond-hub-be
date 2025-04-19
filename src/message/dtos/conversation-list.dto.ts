@@ -8,10 +8,19 @@ export class ConversationUserDto {
   lastSeen?: Date;
 }
 
+export class GroupMemberDto {
+  id: string;
+  userId: string;
+  fullName?: string;
+  profilePictureUrl?: string;
+  role?: string;
+}
+
 export class ConversationGroupDto {
   id: string;
   name: string;
   avatarUrl?: string;
+  members?: GroupMemberDto[];
 }
 
 export class LastMessageDto {
