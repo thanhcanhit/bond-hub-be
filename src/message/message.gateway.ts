@@ -38,11 +38,16 @@ type MessageData = {
 @Injectable()
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: true, // Sử dụng true thay vì '*' để tương thích với cài đặt CORS của ứng dụng
+    credentials: true,
   },
   namespace: '/message',
-  pingInterval: 10000, // 10 seconds
-  pingTimeout: 15000, // 15 seconds
+  pingInterval: 30000, // 30 seconds
+  pingTimeout: 30000, // 30 seconds
+  transports: ['websocket', 'polling'], // Hỗ trợ cả WebSocket và polling để tăng độ tin cậy
+  allowUpgrades: true, // Cho phép nâng cấp từ polling lên websocket
+  connectTimeout: 60000, // Tăng thời gian timeout kết nối lên 60 giây
+  maxHttpBufferSize: 1e8, // Tăng kích thước buffer cho các tin nhắn lớn (100MB)
 })
 export class MessageGateway
   implements
@@ -150,33 +155,58 @@ export class MessageGateway
   }
 
   async handleConnection(client: Socket) {
-    const userId = await this.getUserFromSocket(client);
-    // Không cần kiểm tra userId nữa vì luôn có giá trị
+    try {
+      // Ghi log thông tin kết nối
+      this.logger.log(
+        `Client connected: ${client.id}, transport: ${client.conn.transport.name}`,
+      );
 
-    this.addUserSocket(userId, client);
+      const userId = await this.getUserFromSocket(client);
+      // Không cần kiểm tra userId nữa vì luôn có giá trị
 
-    // Join user's personal room
-    client.join(`user:${userId}`);
+      this.addUserSocket(userId, client);
 
-    // Join all group rooms the user is a member of
-    if (this.messageService) {
-      const userGroups = await this.messageService.getUserGroups(userId);
-      userGroups.forEach((groupId) => {
-        client.join(`group:${groupId}`);
+      // Join user's personal room
+      client.join(`user:${userId}`);
+
+      // Join all group rooms the user is a member of
+      if (this.messageService) {
+        try {
+          const userGroups = await this.messageService.getUserGroups(userId);
+          userGroups.forEach((groupId) => {
+            client.join(`group:${groupId}`);
+          });
+        } catch (error) {
+          this.logger.error(`Error joining group rooms: ${error.message}`);
+        }
+      }
+
+      // Emit user online status
+      this.server.emit('userStatus', {
+        userId,
+        status: 'online',
+        timestamp: new Date(),
+      });
+
+      // Gửi thông báo kết nối thành công
+      client.emit('connectionEstablished', {
+        userId,
+        socketId: client.id,
+        timestamp: new Date(),
+      });
+    } catch (error) {
+      this.logger.error(`Error in handleConnection: ${error.message}`);
+      // Thử kết nối lại nếu có lỗi
+      client.emit('connectionError', {
+        message: 'Error establishing connection, please reconnect',
+        timestamp: new Date(),
       });
     }
-
-    // Emit user online status
-    this.server.emit('userStatus', {
-      userId,
-      status: 'online',
-      timestamp: new Date(),
-    });
   }
 
   private cleanupInactiveSockets() {
     const now = Date.now();
-    const inactivityThreshold = 2 * 60 * 1000; // 2 minutes
+    const inactivityThreshold = 5 * 60 * 1000; // Tăng lên 5 phút để giảm ngắt kết nối không cần thiết
 
     this.logger.debug(
       `Running socket cleanup, checking ${this.lastActivity.size} sockets`,
@@ -195,7 +225,19 @@ export class MessageGateway
           if (userSockets) {
             for (const socket of userSockets) {
               if (socket.id === socketId) {
-                socket.disconnect(true);
+                try {
+                  // Gửi thông báo trước khi ngắt kết nối
+                  socket.emit('connectionWarning', {
+                    message: 'Connection inactive, will be disconnected soon',
+                    timestamp: new Date(),
+                  });
+                  // Ngắt kết nối với lý do rõ ràng
+                  socket.disconnect(true);
+                } catch (error) {
+                  this.logger.error(
+                    `Error disconnecting socket ${socketId}: ${error.message}`,
+                  );
+                }
                 break;
               }
             }
@@ -206,25 +248,45 @@ export class MessageGateway
   }
 
   handleDisconnect(client: Socket) {
-    this.getUserFromSocket(client).then((userId) => {
-      this.removeUserSocket(userId, client);
+    try {
+      this.getUserFromSocket(client)
+        .then((userId) => {
+          this.removeUserSocket(userId, client);
 
-      // If no more sockets for this user, emit offline status
-      if (!this.userSockets.has(userId)) {
-        this.server.emit('userStatus', {
-          userId,
-          status: 'offline',
-          timestamp: new Date(),
+          // If no more sockets for this user, emit offline status
+          if (!this.userSockets.has(userId)) {
+            this.server.emit('userStatus', {
+              userId,
+              status: 'offline',
+              timestamp: new Date(),
+            });
+          }
+
+          // Ghi log thông tin ngắt kết nối
+          this.logger.log(
+            `Client disconnected: ${client.id}, transport: ${client.conn.transport.name}, reason: ${client.conn.transport.readyState}`,
+          );
+        })
+        .catch((error) => {
+          this.logger.error(`Error in handleDisconnect: ${error.message}`);
         });
-      }
-    });
+    } catch (error) {
+      this.logger.error(
+        `Unexpected error in handleDisconnect: ${error.message}`,
+      );
+    }
   }
 
   @SubscribeMessage('heartbeat')
   handleHeartbeat(@ConnectedSocket() client: Socket) {
-    const socketId = client.id;
-    this.lastActivity.set(socketId, Date.now());
-    return { status: 'ok', timestamp: Date.now() };
+    try {
+      const socketId = client.id;
+      this.lastActivity.set(socketId, Date.now());
+      return { status: 'ok', timestamp: Date.now() };
+    } catch (error) {
+      this.logger.error(`Error in heartbeat: ${error.message}`);
+      return { status: 'error', message: error.message, timestamp: Date.now() };
+    }
   }
 
   /**

@@ -28,7 +28,19 @@ interface LoginData {
 }
 
 @Injectable()
-@WebSocketGateway({ namespace: '/qr-code', cors: true })
+@WebSocketGateway({
+  namespace: '/qr-code',
+  cors: {
+    origin: true, // Sử dụng true thay vì '*' để tương thích với cài đặt CORS của ứng dụng
+    credentials: true,
+  },
+  pingInterval: 30000, // 30 seconds
+  pingTimeout: 30000, // 30 seconds
+  transports: ['websocket', 'polling'], // Hỗ trợ cả WebSocket và polling để tăng độ tin cậy
+  allowUpgrades: true, // Cho phép nâng cấp từ polling lên websocket
+  connectTimeout: 60000, // Tăng thời gian timeout kết nối lên 60 giây
+  maxHttpBufferSize: 1e8, // Tăng kích thước buffer cho các tin nhắn lớn (100MB)
+})
 export class QrCodeGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
