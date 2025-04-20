@@ -151,8 +151,21 @@ export class MessageController {
     @Param('messageId', ParseUUIDPipe) messageId: string,
     @Request() req: Request,
   ) {
-    const requestUserId = req['user'].sub;
-    return this.messageService.readMessage(messageId, requestUserId);
+    try {
+      const requestUserId = req['user'].sub;
+      return await this.messageService.readMessage(messageId, requestUserId);
+    } catch (error) {
+      // Log lỗi nhưng vẫn trả về response thành công để tránh làm gián đoạn UI
+      console.error(
+        `Error marking message ${messageId} as read: ${error.message}`,
+      );
+      return {
+        success: false,
+        message:
+          'Failed to mark message as read, but UI will continue to function',
+        error: error.message,
+      };
+    }
   }
 
   @Patch('/unread/:messageId')

@@ -496,58 +496,86 @@ export class MessageService {
   }
 
   async readMessage(messageId: string, readerId: string) {
-    // Verify the message exists and user has access to it
-    const message = await this.findMessageById(messageId);
+    try {
+      // Verify the message exists and user has access to it
+      const message = await this.findMessageById(messageId);
 
-    if (!message) {
-      throw new ForbiddenException('Message not found');
-    }
+      if (!message) {
+        throw new ForbiddenException('Message not found');
+      }
 
-    // For user messages, check if user is sender or receiver
-    if (
-      message.messageType === 'USER' &&
-      message.senderId !== readerId &&
-      message.receiverId !== readerId
-    ) {
-      throw new ForbiddenException('You do not have access to this message');
-    }
+      // Kiểm tra nếu người dùng đã đọc tin nhắn này rồi
+      const readBy = Array.isArray(message.readBy) ? message.readBy : [];
+      if (readBy.includes(readerId)) {
+        // Đã đọc rồi, trả về tin nhắn hiện tại mà không cần cập nhật
+        return message;
+      }
 
-    // For group messages, check if user is a member of the group
-    if (message.messageType === 'GROUP') {
-      const isMember = await this.prisma.groupMember.findFirst({
-        where: {
-          groupId: message.groupId,
-          userId: readerId,
-        },
+      // Kiểm tra quyền truy cập
+      let hasAccess = false;
+
+      // For user messages, check if user is sender or receiver
+      if (message.messageType === 'USER') {
+        hasAccess =
+          message.senderId === readerId || message.receiverId === readerId;
+      }
+      // For group messages, check if user is a member of the group
+      else if (message.messageType === 'GROUP') {
+        const isMember = await this.prisma.groupMember.findFirst({
+          where: {
+            groupId: message.groupId,
+            userId: readerId,
+          },
+        });
+        hasAccess = !!isMember;
+      }
+
+      if (!hasAccess) {
+        throw new ForbiddenException('You do not have access to this message');
+      }
+
+      // Cập nhật tin nhắn với transaction để đảm bảo tính nhất quán
+      const updatedMessage = await this.prisma.$transaction(async (prisma) => {
+        // Cập nhật tin nhắn
+        const updated = await prisma.message.update({
+          where: {
+            id: messageId,
+          },
+          data: {
+            readBy: {
+              push: readerId,
+            },
+          },
+        });
+
+        return updated;
       });
 
-      if (!isMember) {
-        throw new ForbiddenException('You are not a member of this group');
+      // Thông báo qua WebSocket nếu có gateway
+      if (this.messageGateway) {
+        try {
+          this.messageGateway.notifyMessageRead(updatedMessage, readerId);
+        } catch (error) {
+          console.error(`Error notifying message read: ${error.message}`);
+          // Không throw lỗi ở đây để không ảnh hưởng đến response
+        }
       }
+
+      // Phát sự kiện tin nhắn đã được đọc
+      if (this.eventService) {
+        try {
+          this.eventService.emitMessageRead(messageId, readerId);
+        } catch (error) {
+          console.error(`Error emitting message read event: ${error.message}`);
+          // Không throw lỗi ở đây để không ảnh hưởng đến response
+        }
+      }
+
+      return updatedMessage;
+    } catch (error) {
+      console.error(`Error in readMessage: ${error.message}`);
+      throw error;
     }
-
-    const updatedMessage = await this.prisma.message.update({
-      where: {
-        id: messageId,
-      },
-      data: {
-        readBy: {
-          push: readerId,
-        },
-      },
-    });
-
-    // Thông báo qua WebSocket nếu có gateway
-    if (this.messageGateway) {
-      this.messageGateway.notifyMessageRead(updatedMessage, readerId);
-    }
-
-    // Phát sự kiện tin nhắn đã được đọc
-    if (this.eventService) {
-      this.eventService.emitMessageRead(messageId, readerId);
-    }
-
-    return updatedMessage;
   }
 
   async unreadMessage(messageId: string, readerId: string) {

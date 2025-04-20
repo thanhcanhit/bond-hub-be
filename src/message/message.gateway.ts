@@ -347,23 +347,50 @@ export class MessageGateway
    * @param userId ID của người đọc
    */
   notifyMessageRead(message: MessageData, userId: string) {
-    const readEvent = {
-      messageId: message.id,
-      readBy: message.readBy,
-      userId,
-      timestamp: new Date(),
-    };
+    try {
+      const readEvent = {
+        messageId: message.id,
+        readBy: message.readBy,
+        userId,
+        timestamp: new Date(),
+      };
 
-    // Đối với tin nhắn cá nhân
-    if (message.messageType === 'USER') {
-      this.server.to(`user:${message.senderId}`).emit('messageRead', readEvent);
-      this.server
-        .to(`user:${message.receiverId}`)
-        .emit('messageRead', readEvent);
-    }
-    // Đối với tin nhắn nhóm
-    else if (message.messageType === 'GROUP') {
-      this.server.to(`group:${message.groupId}`).emit('messageRead', readEvent);
+      // Đối với tin nhắn cá nhân
+      if (message.messageType === 'USER') {
+        try {
+          this.server
+            .to(`user:${message.senderId}`)
+            .emit('messageRead', readEvent);
+        } catch (error) {
+          this.logger.error(
+            `Error notifying sender ${message.senderId}: ${error.message}`,
+          );
+        }
+
+        try {
+          this.server
+            .to(`user:${message.receiverId}`)
+            .emit('messageRead', readEvent);
+        } catch (error) {
+          this.logger.error(
+            `Error notifying receiver ${message.receiverId}: ${error.message}`,
+          );
+        }
+      }
+      // Đối với tin nhắn nhóm
+      else if (message.messageType === 'GROUP') {
+        try {
+          this.server
+            .to(`group:${message.groupId}`)
+            .emit('messageRead', readEvent);
+        } catch (error) {
+          this.logger.error(
+            `Error notifying group ${message.groupId}: ${error.message}`,
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Error in notifyMessageRead: ${error.message}`);
     }
   }
 
@@ -639,13 +666,24 @@ export class MessageGateway
     const { messageId, userId } = payload;
     this.logger.debug(`Handling message.read event: ${messageId}`);
 
-    // Lấy thông tin tin nhắn từ database
-    if (this.messageService) {
-      this.messageService.findMessageById(messageId).then((message) => {
-        if (message) {
-          this.notifyMessageRead(message, userId);
-        }
-      });
+    try {
+      // Lấy thông tin tin nhắn từ database
+      if (this.messageService) {
+        this.messageService
+          .findMessageById(messageId)
+          .then((message) => {
+            if (message) {
+              this.notifyMessageRead(message, userId);
+            }
+          })
+          .catch((error) => {
+            this.logger.error(
+              `Error finding message ${messageId}: ${error.message}`,
+            );
+          });
+      }
+    } catch (error) {
+      this.logger.error(`Error in handleMessageRead: ${error.message}`);
     }
   }
 
