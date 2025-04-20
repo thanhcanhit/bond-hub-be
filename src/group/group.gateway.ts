@@ -49,6 +49,10 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
       'group.role.changed',
       this.handleGroupRoleChanged.bind(this),
     );
+    this.eventService.eventEmitter.on(
+      'group.dissolved',
+      this.handleGroupDissolved.bind(this),
+    );
   }
 
   handleConnection(client: Socket): void {
@@ -252,6 +256,48 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   /**
+   * Xử lý sự kiện giải tán nhóm
+   * @param payload Dữ liệu sự kiện
+   */
+  private handleGroupDissolved(payload: {
+    groupId: string;
+    groupName: string;
+    dissolvedById: string;
+    timestamp: Date;
+  }): void {
+    const { groupId, groupName, dissolvedById, timestamp } = payload;
+    this.logger.debug(
+      `Handling group.dissolved event: ${groupId}, dissolved by ${dissolvedById}`,
+    );
+
+    // Lấy danh sách thành viên của nhóm từ database
+    this.prisma.groupMember.findMany({
+      where: { groupId },
+      select: { userId: true },
+    }).then(members => {
+      // Thông báo cho từng thành viên
+      for (const member of members) {
+        if (member.userId !== dissolvedById) { // Không thông báo cho người giải tán
+          this.notifyGroupDissolved({
+            groupId,
+            groupName,
+            userId: member.userId,
+            dissolvedBy: dissolvedById,
+            timestamp,
+          });
+        }
+      }
+
+      // Xóa phòng nhóm
+      if (this.groupRooms.has(groupId)) {
+        this.groupRooms.delete(groupId);
+      }
+    }).catch(error => {
+      this.logger.error(`Error handling group dissolution: ${error.message}`);
+    });
+  }
+
+  /**
    * Notify group members about a group update
    * @param groupId Group ID
    * @param data Update data
@@ -294,5 +340,27 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
    */
   notifyAvatarUpdated(groupId: string, data: Record<string, any>): void {
     this.server.to(`group:${groupId}`).emit('avatarUpdated', data);
+  }
+
+  /**
+   * Notify a user about group dissolution
+   * @param data Dissolution data including userId to notify
+   */
+  notifyGroupDissolved(data: Record<string, any>): void {
+    // Since the group room no longer exists, we need to notify each user individually
+    const userId = data.userId;
+    if (userId) {
+      // Get all sockets for this user
+      const userSockets = this.userSockets.get(userId);
+      if (userSockets && userSockets.size > 0) {
+        // Emit to all user's sockets
+        for (const socket of userSockets) {
+          socket.emit('groupDissolved', data);
+        }
+        this.logger.debug(
+          `Notified user ${userId} about dissolution of group ${data.groupId}`,
+        );
+      }
+    }
   }
 }

@@ -1,0 +1,593 @@
+{
+  "info": {
+    "_postman_id": "a1a2a3a4-b1b2-c1c2-d1d2-e1e2e3e4e5e6",
+    "name": "Bond Hub Group API",
+    "description": "Collection for testing the Group Management API in Bond Hub Backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login as Lê Hoàng Khang (Leader)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set(\"accessToken\", jsonData.accessToken);",
+                  "pm.environment.set(\"refreshToken\", jsonData.refreshToken);",
+                  "pm.environment.set(\"deviceId\", jsonData.device.id);",
+                  "pm.environment.set(\"userId\", \"a1a0ae5b-070f-40c2-a07d-c61c06623e7a\");"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"iamhoangkhang@icloud.com\",\n    \"password\": \"lehoangkhang\",\n    \"deviceType\": \"DESKTOP\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login as Lê Hoàng Khang (Leader)"
+          },
+          "response": []
+        },
+        {
+          "name": "Login as Nguyễn Thanh Cảnh (Deputy)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set(\"accessToken2\", jsonData.accessToken);",
+                  "pm.environment.set(\"refreshToken2\", jsonData.refreshToken);",
+                  "pm.environment.set(\"deviceId2\", jsonData.device.id);",
+                  "pm.environment.set(\"userId2\", \"cea3f6a0-b3bf-4abe-9266-7a3a6fc29173\");"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"thanhcanh.dev@gmail.com\",\n    \"password\": \"thanhcanhit\",\n    \"deviceType\": \"DESKTOP\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login as Nguyễn Thanh Cảnh (Deputy)"
+          },
+          "response": []
+        },
+        {
+          "name": "Login as Hồ Thị Như Tâm (Member)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set(\"accessToken3\", jsonData.accessToken);",
+                  "pm.environment.set(\"refreshToken3\", jsonData.refreshToken);",
+                  "pm.environment.set(\"deviceId3\", jsonData.device.id);",
+                  "pm.environment.set(\"userId3\", \"43c307df-1cf7-407f-85e4-21f16a4e3bf9\");"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"nhutam050@gmail.com\",\n    \"password\": \"hothinhutam\",\n    \"deviceType\": \"DESKTOP\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login as Hồ Thị Như Tâm (Member)"
+          },
+          "response": []
+        }
+      ],
+      "description": "Authentication endpoints to get tokens for testing"
+    },
+    {
+      "name": "Group Management",
+      "item": [
+        {
+          "name": "Create Group",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set(\"groupId\", jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Test Group",
+                  "type": "text"
+                },
+                {
+                  "key": "creatorId",
+                  "value": "{{userId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "initialMembers",
+                  "value": "[{\"userId\":\"{{userId2}}\",\"addedById\":\"{{userId}}\"},{\"userId\":\"{{userId3}}\",\"addedById\":\"{{userId}}\"}]",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups"
+              ]
+            },
+            "description": "Create a new group with initial members"
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Groups",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/user",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                "user"
+              ]
+            },
+            "description": "Get all groups for the current user"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                "{{groupId}}"
+              ]
+            },
+            "description": "Get details of a specific group"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Group",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Updated Group Name\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                "{{groupId}}"
+              ]
+            },
+            "description": "Update group information (name)"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Member",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"groupId\": \"{{groupId}}\",\n    \"userId\": \"1cc1b368-02e1-44a7-87c1-17ab9620bb5f\",\n    \"addedById\": \"{{userId}}\",\n    \"role\": \"MEMBER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                "members"
+              ]
+            },
+            "description": "Add a new member to the group"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Member Role (Leader)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"role\": \"CO_LEADER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}/members/{{userId2}}/role",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                "{{groupId}}",
+                "members",
+                "{{userId2}}",
+                "role"
+              ]
+            },
+            "description": "Update a member's role to CO_LEADER (only LEADER can do this)"
+          },
+          "response": []
+        },
+        {
+          "name": "Kick Member (Leader)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}/members/{{userId3}}/kick",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                "{{groupId}}",
+                "members",
+                "{{userId3}}",
+                "kick"
+              ]
+            },
+            "description": "Kick a member from the group (Leader kicking a regular member)"
+          },
+          "response": []
+        },
+        {
+          "name": "Kick Member (Deputy)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken2}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}/members/1cc1b368-02e1-44a7-87c1-17ab9620bb5f/kick",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                "{{groupId}}",
+                "members",
+                "1cc1b368-02e1-44a7-87c1-17ab9620bb5f",
+                "kick"
+              ]
+            },
+            "description": "Kick a member from the group (Deputy kicking a regular member)"
+          },
+          "response": []
+        },
+        {
+          "name": "Kick Deputy (Member)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken3}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}/members/{{userId2}}/kick",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                "{{groupId}}",
+                "members",
+                "{{userId2}}",
+                "kick"
+              ]
+            },
+            "description": "Try to kick a deputy as a regular member (should fail)"
+          },
+          "response": []
+        },
+        {
+          "name": "Leave Group (Member)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken3}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}/leave",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                "{{groupId}}",
+                "leave"
+              ]
+            },
+            "description": "Leave a group as a regular member"
+          },
+          "response": []
+        },
+        {
+          "name": "Leave Group (Leader)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}/leave",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                "{{groupId}}",
+                "leave"
+              ]
+            },
+            "description": "Try to leave a group as a leader (should fail)"
+          },
+          "response": []
+        },
+        {
+          "name": "Dissolve Group (Member)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken3}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}/dissolve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                "{{groupId}}",
+                "dissolve"
+              ]
+            },
+            "description": "Try to dissolve a group as a regular member (should fail)"
+          },
+          "response": []
+        },
+        {
+          "name": "Dissolve Group (Leader)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/groups/{{groupId}}/dissolve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "groups",
+                "{{groupId}}",
+                "dissolve"
+              ]
+            },
+            "description": "Dissolve a group as the leader"
+          },
+          "response": []
+        }
+      ],
+      "description": "Group management endpoints"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ]
+}

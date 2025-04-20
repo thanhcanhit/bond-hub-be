@@ -90,8 +90,7 @@ export class GroupService {
           throw new Error('Failed to extract filename from URL');
         }
 
-        // Create a new path with the group ID
-        const newPath = `${group.id}/${fileName}`;
+        // Create a new path with the group ID (used for organization)
 
         // Get the file from the temp location
         const tempPath = `temp/${fileName}`;
@@ -317,6 +316,89 @@ export class GroupService {
     }
   }
 
+  /**
+   * Dissolve a group (delete it completely)
+   * - Only the group leader can dissolve a group
+   * - All members will be removed and the group will be deleted
+   * @param groupId Group ID
+   * @param requestUserId User ID making the request
+   */
+  async dissolveGroup(groupId: string, requestUserId: string): Promise<void> {
+    // Get group with all members
+    const group = await this.prisma.group.findUnique({
+      where: { id: groupId },
+      include: {
+        members: true,
+      },
+    });
+
+    if (!group) {
+      throw new NotFoundException(`Group with ID ${groupId} not found`);
+    }
+
+    // Find the requester's membership
+    const requesterMembership = group.members.find(
+      (member) => member.userId === requestUserId,
+    );
+
+    // Check if requester is a member
+    if (!requesterMembership) {
+      throw new ForbiddenException(
+        `User ${requestUserId} is not a member of group ${groupId}`,
+      );
+    }
+
+    // Check if requester is the leader
+    if (requesterMembership.role !== GroupRole.LEADER) {
+      throw new ForbiddenException(
+        'Only the group leader can dissolve the group',
+      );
+    }
+
+    // Get all members before deletion for notification
+    const allMembers = [...group.members];
+
+    try {
+      // First delete all group members
+      await this.prisma.groupMember.deleteMany({
+        where: { groupId },
+      });
+
+      // Then delete the group
+      await this.prisma.group.delete({
+        where: { id: groupId },
+      });
+
+      // Notify all members about the group dissolution
+      for (const member of allMembers) {
+        if (member.userId !== requestUserId) { // Don't notify the leader who dissolved the group
+          // Thông báo qua GroupGateway
+          this.groupGateway.notifyGroupDissolved({
+            groupId,
+            groupName: group.name,
+            userId: member.userId,
+            dissolvedBy: requestUserId,
+            timestamp: new Date(),
+          });
+        }
+      }
+
+      // Phát sự kiện về việc giải tán nhóm
+      this.eventService.emitGroupDissolved(groupId, group.name, requestUserId);
+
+      this.logger.log(
+        `Group ${groupId} was dissolved by user ${requestUserId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to dissolve group ${groupId}: ${error.message}`,
+      );
+      throw new BadRequestException(
+        `Failed to dissolve group: ${error.message}`,
+      );
+    }
+  }
+
   async findUserGroups(userId: string): Promise<any[]> {
     const groups = await this.prisma.group.findMany({
       where: {
@@ -483,6 +565,113 @@ export class GroupService {
     this.eventService.emitGroupMemberRemoved(groupId, userId, requestUserId);
   }
 
+  /**
+   * Kick a member from the group with specific permission checks
+   * - Only LEADER can kick CO_LEADER
+   * - LEADER and CO_LEADER can kick regular MEMBER
+   * @param groupId Group ID
+   * @param kickUserId User ID to kick
+   * @param requestUserId User ID making the request
+   */
+  async kickMember(
+    groupId: string,
+    kickUserId: string,
+    requestUserId: string,
+  ): Promise<void> {
+    // Get group with all members
+    const group = await this.prisma.group.findUnique({
+      where: { id: groupId },
+      include: {
+        members: true,
+      },
+    });
+
+    if (!group) {
+      throw new NotFoundException(`Group with ID ${groupId} not found`);
+    }
+
+    // Find the requester's membership
+    const requesterMembership = group.members.find(
+      (member) => member.userId === requestUserId,
+    );
+
+    // Find the target user's membership
+    const targetMembership = group.members.find(
+      (member) => member.userId === kickUserId,
+    );
+
+    // Check if both users are members
+    if (!requesterMembership) {
+      throw new ForbiddenException(
+        `User ${requestUserId} is not a member of group ${groupId}`,
+      );
+    }
+
+    if (!targetMembership) {
+      throw new NotFoundException(
+        `User ${kickUserId} is not a member of group ${groupId}`,
+      );
+    }
+
+    // Check if user is trying to kick themselves
+    if (requestUserId === kickUserId) {
+      throw new BadRequestException(
+        'You cannot kick yourself from the group. Use the leave group function instead.',
+      );
+    }
+
+    // Check if target is the LEADER (cannot be kicked)
+    if (targetMembership.role === GroupRole.LEADER) {
+      throw new ForbiddenException('The group leader cannot be kicked');
+    }
+
+    // Apply permission rules
+    // Rule 1: Only LEADER can kick CO_LEADER
+    if (
+      targetMembership.role === GroupRole.CO_LEADER &&
+      requesterMembership.role !== GroupRole.LEADER
+    ) {
+      throw new ForbiddenException(
+        'Only the group leader can kick a co-leader',
+      );
+    }
+
+    // Rule 2: LEADER and CO_LEADER can kick regular MEMBER
+    if (
+      targetMembership.role === GroupRole.MEMBER &&
+      requesterMembership.role !== GroupRole.LEADER &&
+      requesterMembership.role !== GroupRole.CO_LEADER
+    ) {
+      throw new ForbiddenException(
+        'Only group leaders and co-leaders can kick members',
+      );
+    }
+
+    // All permission checks passed, proceed with kicking the member
+    await this.prisma.groupMember.deleteMany({
+      where: {
+        groupId,
+        userId: kickUserId,
+      },
+    });
+
+    // Thông báo qua GroupGateway
+    this.groupGateway.notifyMemberRemoved(groupId, {
+      groupId,
+      userId: kickUserId,
+      removedBy: requestUserId,
+      kicked: true, // Flag to indicate this was a kick, not a voluntary leave
+      timestamp: new Date(),
+    });
+
+    // Phát sự kiện để MessageGateway cập nhật room
+    this.eventService.emitGroupMemberRemoved(groupId, kickUserId, requestUserId);
+
+    this.logger.log(
+      `User ${kickUserId} was kicked from group ${groupId} by ${requestUserId}`,
+    );
+  }
+
   async updateMemberRole(
     groupId: string,
     userId: string,
@@ -573,34 +762,7 @@ export class GroupService {
     return updatedMember;
   }
 
-  /**
-   * Get membership ID for a user in a group
-   * @param groupId Group ID
-   * @param userId User ID
-   * @returns Membership ID
-   */
-  private async getMembershipId(
-    groupId: string,
-    userId: string,
-  ): Promise<string> {
-    const membership = await this.prisma.groupMember.findFirst({
-      where: {
-        groupId,
-        userId,
-      },
-      select: {
-        id: true,
-      },
-    });
 
-    if (!membership) {
-      throw new NotFoundException(
-        `User ${userId} is not a member of group ${groupId}`,
-      );
-    }
-
-    return membership.id;
-  }
 
   /**
    * Validates if a user has leadership access to a group and returns group info with leadership details
@@ -764,6 +926,12 @@ export class GroupService {
     return formattedMember;
   }
 
+  /**
+   * Leave a group with permission checks
+   * - Group leader cannot leave the group (must transfer leadership first)
+   * @param groupId Group ID
+   * @param userId User ID leaving the group
+   */
   async leaveGroup(groupId: string, userId: string): Promise<void> {
     const group = await this.prisma.group.findUnique({
       where: { id: groupId },
@@ -799,6 +967,22 @@ export class GroupService {
         id: userMembership.id,
       },
     });
+
+    // Thông báo qua GroupGateway
+    this.groupGateway.notifyMemberRemoved(groupId, {
+      groupId,
+      userId,
+      removedBy: userId, // User removed themselves
+      left: true, // Flag to indicate this was a voluntary leave
+      timestamp: new Date(),
+    });
+
+    // Phát sự kiện để MessageGateway cập nhật room
+    this.eventService.emitGroupMemberRemoved(groupId, userId, userId);
+
+    this.logger.log(
+      `User ${userId} left group ${groupId}`,
+    );
   }
 
   /**

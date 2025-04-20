@@ -108,6 +108,28 @@ export class GroupController {
     return this.groupService.removeMember(groupId, removeUserId, requestUserId);
   }
 
+  /**
+   * Kick a member from the group with permission checks
+   * - Only LEADER can kick CO_LEADER
+   * - LEADER and CO_LEADER can kick regular MEMBER
+   * @param groupId Group ID
+   * @param userId User ID to kick
+   * @param req Request object
+   */
+  @Post(':groupId/members/:userId/kick')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  kickMember(
+    @Param('groupId') groupId: string,
+    @Param('userId') kickUserId: string,
+    @Request() req: Request,
+  ) {
+    const requestUserId = req['user'].sub;
+    this.logger.log(
+      `Kick member request - GroupId: ${groupId}, KickUserId: ${kickUserId}, RequestUserId: ${requestUserId}`,
+    );
+    return this.groupService.kickMember(groupId, kickUserId, requestUserId);
+  }
+
   @Patch(':groupId/members/:userId/role')
   updateMemberRole(
     @Param('groupId') groupId: string,
@@ -124,11 +146,37 @@ export class GroupController {
     );
   }
 
+  /**
+   * Leave a group with permission checks
+   * - Group leader cannot leave the group (must transfer leadership first)
+   * @param groupId Group ID
+   * @param req Request object containing user information
+   */
   @Post(':groupId/leave')
   @HttpCode(HttpStatus.NO_CONTENT)
   leaveGroup(@Param('groupId') groupId: string, @Request() req: Request) {
     const userId = req['user'].sub;
+    this.logger.log(
+      `Leave group request - GroupId: ${groupId}, UserId: ${userId}`,
+    );
     return this.groupService.leaveGroup(groupId, userId);
+  }
+
+  /**
+   * Dissolve a group (delete it completely)
+   * - Only the group leader can dissolve a group
+   * - All members will be removed and the group will be deleted
+   * @param groupId Group ID
+   * @param req Request object containing user information
+   */
+  @Post(':groupId/dissolve')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  dissolveGroup(@Param('groupId') groupId: string, @Request() req: Request) {
+    const requestUserId = req['user'].sub;
+    this.logger.log(
+      `Dissolve group request - GroupId: ${groupId}, RequestUserId: ${requestUserId}`,
+    );
+    return this.groupService.dissolveGroup(groupId, requestUserId);
   }
 
   /**

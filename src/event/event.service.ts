@@ -69,6 +69,20 @@ export class EventService {
     });
   }
 
+  emitGroupDissolved(
+    groupId: string,
+    groupName: string,
+    dissolvedById: string,
+  ): void {
+    this.logger.debug(`Emitting group.dissolved: ${groupId}`);
+    this.eventEmitter.emit('group.dissolved', {
+      groupId,
+      groupName,
+      dissolvedById,
+      timestamp: new Date(),
+    });
+  }
+
   // Message events
   emitMessageCreated(message: any): void {
     this.logger.debug(`Emitting message.created: ${message.id}`);

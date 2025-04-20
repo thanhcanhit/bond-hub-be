@@ -83,6 +83,10 @@ export class MessageGateway
         'message.read',
         this.handleMessageRead.bind(this),
       );
+      this.eventService.eventEmitter.on(
+        'group.dissolved',
+        this.handleGroupDissolved.bind(this),
+      );
     }
   }
 
@@ -581,5 +585,25 @@ export class MessageGateway
         }
       });
     }
+  }
+
+  /**
+   * Xử lý sự kiện giải tán nhóm
+   * @param payload Dữ liệu sự kiện
+   */
+  private handleGroupDissolved(payload: {
+    groupId: string;
+    groupName: string;
+    dissolvedById: string;
+    timestamp: Date;
+  }): void {
+    const { groupId } = payload;
+    this.logger.debug(`Handling group.dissolved event: ${groupId}`);
+
+    // Xóa phòng nhóm khỏi socket.io
+    const roomName = `group:${groupId}`;
+    this.server.in(roomName).socketsLeave(roomName);
+
+    this.logger.debug(`All sockets removed from room ${roomName}`);
   }
 }
