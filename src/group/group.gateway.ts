@@ -97,8 +97,28 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
-  handleConnection(client: Socket): void {
+  async handleConnection(client: Socket): Promise<void> {
     this.logger.debug(`Client connected: ${client.id}`);
+
+    try {
+      // Lấy userId từ token hoặc query params
+      const userId = client.handshake.auth?.userId || client.handshake.query?.userId as string;
+
+      if (userId) {
+        // Lưu trữ socket của người dùng
+        if (!this.userSockets.has(userId)) {
+          this.userSockets.set(userId, new Set());
+        }
+        this.userSockets.get(userId).add(client);
+
+        // Thêm người dùng vào phòng cá nhân của họ
+        client.join(`user:${userId}`);
+
+        this.logger.debug(`User ${userId} connected and joined personal room`);
+      }
+    } catch (error) {
+      this.logger.error(`Error in handleConnection: ${error.message}`);
+    }
   }
 
   handleDisconnect(client: Socket): void {
@@ -457,20 +477,31 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
         updateConversationList: data.updateConversationList !== false, // Mặc định là true
       };
 
-      // Get all sockets for this user
+      this.logger.debug(`Attempting to notify user ${userId} about dissolution of group ${data.groupId}`);
+
+      // Phương pháp 1: Gửi trực tiếp đến tất cả socket của người dùng
       const userSockets = this.userSockets.get(userId);
       if (userSockets && userSockets.size > 0) {
         // Emit to all user's sockets
         for (const socket of userSockets) {
           socket.emit('groupDissolved', notificationData);
+          this.logger.debug(`Emitted groupDissolved directly to socket ${socket.id}`);
         }
-        this.logger.debug(
-          `Notified user ${userId} about dissolution of group ${data.groupId}`,
-        );
+      } else {
+        this.logger.debug(`No sockets found for user ${userId} in userSockets map`);
       }
 
-      // Emit to user's personal room
+      // Phương pháp 2: Gửi đến phòng cá nhân của người dùng
       this.server.to(`user:${userId}`).emit('groupDissolved', notificationData);
+      this.logger.debug(`Emitted groupDissolved to room user:${userId}`);
+
+      // Phương pháp 3: Gửi đến tất cả client để client tự lọc
+      // Chỉ sử dụng trong trường hợp khẩn cấp khi các phương pháp khác không hoạt động
+      this.server.emit('groupDissolvedBroadcast', {
+        ...notificationData,
+        targetUserId: userId, // Thêm trường này để client có thể lọc
+      });
+      this.logger.debug(`Broadcast groupDissolvedBroadcast to all clients with targetUserId=${userId}`);
 
       // Gửi thêm sự kiện updateConversationList để đảm bảo frontend cập nhật danh sách
       this.server.to(`user:${userId}`).emit('updateConversationList', {
