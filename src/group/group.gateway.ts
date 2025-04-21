@@ -147,18 +147,18 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * Xử lý sự kiện thêm thành viên vào nhóm
    * @param payload Dữ liệu sự kiện
    */
-  private handleGroupMemberAdded(payload: {
+  private async handleGroupMemberAdded(payload: {
     groupId: string;
     userId: string;
     addedById: string;
-  }): void {
+  }): Promise<void> {
     const { groupId, userId, addedById } = payload;
     this.logger.debug(
       `Handling group.member.added event: ${groupId}, ${userId}`,
     );
 
-    // Tự động thêm người dùng vào phòng nhóm
-    this.joinGroupRoom(userId, groupId);
+    // Tự động thêm người dùng vào phòng nhóm và đợi hoàn thành
+    await this.joinGroupRoom(userId, groupId);
 
     // Thông báo cho các thành viên trong nhóm
     this.notifyMemberAdded(groupId, {
@@ -166,6 +166,14 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
       userId,
       addedById,
       timestamp: new Date(),
+    });
+
+    // Thông báo trực tiếp cho người dùng mới được thêm vào nhóm
+    this.notifyUserAddedToGroup(userId, {
+      groupId,
+      addedById,
+      timestamp: new Date(),
+      action: 'added_to_group',
     });
   }
 
@@ -372,6 +380,30 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
           `Notified user ${userId} about dissolution of group ${data.groupId}`,
         );
       }
+
+      // Emit to user's personal room
+      this.server.to(`user:${userId}`).emit('groupDissolved', data);
+    }
+  }
+
+  /**
+   * Notify a user directly that they have been added to a group
+   * @param userId User ID to notify
+   * @param data Group data
+   */
+  notifyUserAddedToGroup(userId: string, data: Record<string, any>): void {
+    // Emit to user's personal room
+    this.server.to(`user:${userId}`).emit('addedToGroup', data);
+
+    // Also try to emit directly to user's sockets as a fallback
+    const userSockets = this.userSockets.get(userId);
+    if (userSockets && userSockets.size > 0) {
+      for (const socket of userSockets) {
+        socket.emit('addedToGroup', data);
+      }
+      this.logger.debug(
+        `Notified user ${userId} about being added to group ${data.groupId}`,
+      );
     }
   }
 }

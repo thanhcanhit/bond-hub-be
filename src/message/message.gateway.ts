@@ -588,12 +588,12 @@ export class MessageGateway
    * Xử lý sự kiện thêm thành viên vào nhóm
    * @param payload Dữ liệu sự kiện
    */
-  private handleGroupMemberAdded(payload: {
+  private async handleGroupMemberAdded(payload: {
     groupId: string;
     userId: string;
     addedById: string;
-  }): void {
-    const { groupId, userId } = payload;
+  }): Promise<void> {
+    const { groupId, userId, addedById } = payload;
     this.logger.debug(
       `Handling group.member.added event: ${groupId}, ${userId}`,
     );
@@ -607,7 +607,18 @@ export class MessageGateway
       this.logger.debug(
         `User ${userId} joined group room ${groupId} via event`,
       );
+
+      // Thông báo cho người dùng cập nhật danh sách nhóm của họ
+      this.server.to(`user:${userId}`).emit('updateGroupList', {
+        action: 'added_to_group',
+        groupId,
+        addedById,
+        timestamp: new Date(),
+      });
     }
+
+    // Nếu người dùng không có socket nào đang kết nối, họ sẽ nhận được thông báo khi kết nối lại
+    // và sẽ tự động tham gia vào các phòng nhóm thông qua handleConnection
   }
 
   /**
