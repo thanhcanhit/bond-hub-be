@@ -1410,8 +1410,8 @@ export class MessageService {
     const directConversations = Array.from(directConversationMap.values());
     const groupConversations = Array.from(groupConversationMap.values());
 
-    console.log(`Created ${directConversations.length} direct conversations`);
-    console.log(`Created ${groupConversations.length} group conversations`);
+    // console.log(`Created ${directConversations.length} direct conversations`);
+    // console.log(`Created ${groupConversations.length} group conversations`);
 
     // In ra chi tiết các cuộc trò chuyện để kiểm tra
     console.log(
