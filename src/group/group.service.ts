@@ -572,7 +572,12 @@ export class GroupService {
     });
 
     // Phát sự kiện để MessageGateway cập nhật room
-    this.eventService.emitGroupMemberRemoved(groupId, userId, requestUserId);
+    this.eventService.emitGroupMemberRemoved(
+      groupId,
+      userId,
+      requestUserId,
+      {},
+    );
   }
 
   /**
@@ -679,6 +684,7 @@ export class GroupService {
       groupId,
       kickUserId,
       requestUserId,
+      { kicked: true },
     );
 
     this.logger.log(
@@ -990,7 +996,9 @@ export class GroupService {
     });
 
     // Phát sự kiện để MessageGateway cập nhật room
-    this.eventService.emitGroupMemberRemoved(groupId, userId, userId);
+    this.eventService.emitGroupMemberRemoved(groupId, userId, userId, {
+      left: true,
+    });
 
     this.logger.log(`User ${userId} left group ${groupId}`);
   }

@@ -185,8 +185,10 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
     groupId: string;
     userId: string;
     removedById: string;
+    kicked?: boolean;
+    left?: boolean;
   }): void {
-    const { groupId, userId, removedById } = payload;
+    const { groupId, userId, removedById, kicked, left } = payload;
     this.logger.debug(
       `Handling group.member.removed event: ${groupId}, ${userId}`,
     );
@@ -199,7 +201,19 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
       groupId,
       userId,
       removedById,
+      kicked,
+      left,
       timestamp: new Date(),
+    });
+
+    // Thông báo trực tiếp cho người dùng bị xóa khỏi nhóm
+    this.notifyUserRemovedFromGroup(userId, {
+      groupId,
+      removedById,
+      kicked,
+      left,
+      timestamp: new Date(),
+      action: 'removed_from_group',
     });
   }
 
@@ -452,5 +466,36 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
         `Notified user ${userId} about being added to group ${data.groupId}`,
       );
     }
+  }
+
+  /**
+   * Notify a user directly that they have been removed from a group
+   * @param userId User ID to notify
+   * @param data Group data
+   */
+  notifyUserRemovedFromGroup(userId: string, data: Record<string, any>): void {
+    // Emit to user's personal room
+    this.server.to(`user:${userId}`).emit('removedFromGroup', data);
+
+    // Also try to emit directly to user's sockets as a fallback
+    const userSockets = this.userSockets.get(userId);
+    if (userSockets && userSockets.size > 0) {
+      for (const socket of userSockets) {
+        socket.emit('removedFromGroup', data);
+      }
+      this.logger.debug(
+        `Notified user ${userId} about being removed from group ${data.groupId}`,
+      );
+    }
+
+    // Emit updateGroupList event to ensure frontend updates the group list
+    this.server.to(`user:${userId}`).emit('updateGroupList', {
+      action: 'removed_from_group',
+      groupId: data.groupId,
+      removedById: data.removedById,
+      kicked: data.kicked,
+      left: data.left,
+      timestamp: data.timestamp || new Date(),
+    });
   }
 }

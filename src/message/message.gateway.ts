@@ -776,8 +776,10 @@ export class MessageGateway
     groupId: string;
     userId: string;
     removedById: string;
+    kicked?: boolean;
+    left?: boolean;
   }): void {
-    const { groupId, userId } = payload;
+    const { groupId, userId, removedById, kicked, left } = payload;
     this.logger.debug(
       `Handling group.member.removed event: ${groupId}, ${userId}`,
     );
@@ -789,6 +791,42 @@ export class MessageGateway
         socket.leave(`group:${groupId}`);
       }
       this.logger.debug(`User ${userId} left group room ${groupId} via event`);
+
+      // Thông báo cho người dùng cập nhật danh sách nhóm của họ
+      if (this.server) {
+        try {
+          this.server.to(`user:${userId}`).emit('updateGroupList', {
+            action: 'removed_from_group',
+            groupId,
+            removedById,
+            kicked,
+            left,
+            timestamp: new Date(),
+          });
+        } catch (error) {
+          this.logger.error(
+            `Error sending updateGroupList event: ${error.message}`,
+          );
+
+          // Fallback: gửi trực tiếp đến các socket của người dùng
+          for (const socket of userSockets) {
+            try {
+              socket.emit('updateGroupList', {
+                action: 'removed_from_group',
+                groupId,
+                removedById,
+                kicked,
+                left,
+                timestamp: new Date(),
+              });
+            } catch (socketError) {
+              this.logger.error(
+                `Error sending direct socket event: ${socketError.message}`,
+              );
+            }
+          }
+        }
+      }
     }
   }
 

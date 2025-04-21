@@ -25,12 +25,15 @@ export class EventService {
     groupId: string,
     userId: string,
     removedById: string,
+    options: { kicked?: boolean; left?: boolean } = {},
   ): void {
     this.logger.debug(`Emitting group.member.removed: ${groupId}, ${userId}`);
     this.eventEmitter.emit('group.member.removed', {
       groupId,
       userId,
       removedById,
+      kicked: options.kicked,
+      left: options.left,
     });
   }
 
