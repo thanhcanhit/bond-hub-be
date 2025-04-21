@@ -371,7 +371,8 @@ export class GroupService {
 
       // Notify all members about the group dissolution
       for (const member of allMembers) {
-        if (member.userId !== requestUserId) { // Don't notify the leader who dissolved the group
+        if (member.userId !== requestUserId) {
+          // Don't notify the leader who dissolved the group
           // Thông báo qua GroupGateway
           this.groupGateway.notifyGroupDissolved({
             groupId,
@@ -665,7 +666,11 @@ export class GroupService {
     });
 
     // Phát sự kiện để MessageGateway cập nhật room
-    this.eventService.emitGroupMemberRemoved(groupId, kickUserId, requestUserId);
+    this.eventService.emitGroupMemberRemoved(
+      groupId,
+      kickUserId,
+      requestUserId,
+    );
 
     this.logger.log(
       `User ${kickUserId} was kicked from group ${groupId} by ${requestUserId}`,
@@ -761,8 +766,6 @@ export class GroupService {
 
     return updatedMember;
   }
-
-
 
   /**
    * Validates if a user has leadership access to a group and returns group info with leadership details
@@ -980,9 +983,7 @@ export class GroupService {
     // Phát sự kiện để MessageGateway cập nhật room
     this.eventService.emitGroupMemberRemoved(groupId, userId, userId);
 
-    this.logger.log(
-      `User ${userId} left group ${groupId}`,
-    );
+    this.logger.log(`User ${userId} left group ${groupId}`);
   }
 
   /**
