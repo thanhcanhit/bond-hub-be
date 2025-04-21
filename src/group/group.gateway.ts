@@ -279,41 +279,73 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
     groupName: string;
     dissolvedById: string;
     timestamp: Date;
+    members?: Array<{ userId: string }>;
   }): void {
-    const { groupId, groupName, dissolvedById, timestamp } = payload;
+    const { groupId, groupName, dissolvedById, timestamp, members } = payload;
     this.logger.debug(
       `Handling group.dissolved event: ${groupId}, dissolved by ${dissolvedById}`,
     );
 
-    // Lấy danh sách thành viên của nhóm từ database
-    this.prisma.groupMember
-      .findMany({
-        where: { groupId },
-        select: { userId: true },
-      })
-      .then((members) => {
-        // Thông báo cho từng thành viên
-        for (const member of members) {
-          if (member.userId !== dissolvedById) {
-            // Không thông báo cho người giải tán
-            this.notifyGroupDissolved({
-              groupId,
-              groupName,
-              userId: member.userId,
-              dissolvedBy: dissolvedById,
-              timestamp,
-            });
-          }
-        }
+    if (members && members.length > 0) {
+      // Sử dụng danh sách thành viên từ payload
+      this.logger.debug(
+        `Using member list from payload: ${members.length} members`,
+      );
 
-        // Xóa phòng nhóm
-        if (this.groupRooms.has(groupId)) {
-          this.groupRooms.delete(groupId);
+      // Thông báo cho từng thành viên
+      for (const member of members) {
+        if (member.userId !== dissolvedById) {
+          // Không thông báo cho người giải tán
+          this.notifyGroupDissolved({
+            groupId,
+            groupName,
+            userId: member.userId,
+            dissolvedBy: dissolvedById,
+            timestamp,
+            action: 'group_dissolved',
+            updateConversationList: true,
+          });
         }
-      })
-      .catch((error) => {
-        this.logger.error(`Error handling group dissolution: ${error.message}`);
-      });
+      }
+    } else {
+      // Trường hợp khẩn cấp: Nếu không có danh sách thành viên, thử truy vấn database
+      this.logger.warn(
+        `No member list in payload, attempting to query database (may fail if group already deleted)`,
+      );
+
+      this.prisma.groupMember
+        .findMany({
+          where: { groupId },
+          select: { userId: true },
+        })
+        .then((dbMembers) => {
+          // Thông báo cho từng thành viên
+          for (const member of dbMembers) {
+            if (member.userId !== dissolvedById) {
+              // Không thông báo cho người giải tán
+              this.notifyGroupDissolved({
+                groupId,
+                groupName,
+                userId: member.userId,
+                dissolvedBy: dissolvedById,
+                timestamp,
+                action: 'group_dissolved',
+                updateConversationList: true,
+              });
+            }
+          }
+        })
+        .catch((error) => {
+          this.logger.error(
+            `Error querying members from database: ${error.message}`,
+          );
+        });
+    }
+
+    // Xóa phòng nhóm
+    if (this.groupRooms.has(groupId)) {
+      this.groupRooms.delete(groupId);
+    }
   }
 
   /**
@@ -369,12 +401,19 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Since the group room no longer exists, we need to notify each user individually
     const userId = data.userId;
     if (userId) {
+      // Thêm thông tin rõ ràng cho frontend
+      const notificationData = {
+        ...data,
+        action: data.action || 'group_dissolved',
+        updateConversationList: data.updateConversationList !== false, // Mặc định là true
+      };
+
       // Get all sockets for this user
       const userSockets = this.userSockets.get(userId);
       if (userSockets && userSockets.size > 0) {
         // Emit to all user's sockets
         for (const socket of userSockets) {
-          socket.emit('groupDissolved', data);
+          socket.emit('groupDissolved', notificationData);
         }
         this.logger.debug(
           `Notified user ${userId} about dissolution of group ${data.groupId}`,
@@ -382,7 +421,15 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       // Emit to user's personal room
-      this.server.to(`user:${userId}`).emit('groupDissolved', data);
+      this.server.to(`user:${userId}`).emit('groupDissolved', notificationData);
+
+      // Gửi thêm sự kiện updateConversationList để đảm bảo frontend cập nhật danh sách
+      this.server.to(`user:${userId}`).emit('updateConversationList', {
+        action: 'group_dissolved',
+        groupId: data.groupId,
+        groupName: data.groupName,
+        timestamp: data.timestamp || new Date(),
+      });
     }
   }
 

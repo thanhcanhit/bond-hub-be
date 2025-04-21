@@ -384,8 +384,17 @@ export class GroupService {
         }
       }
 
-      // Phát sự kiện về việc giải tán nhóm
-      this.eventService.emitGroupDissolved(groupId, group.name, requestUserId);
+      // Phát sự kiện về việc giải tán nhóm với danh sách thành viên
+      // Chuyển đổi danh sách thành viên sang định dạng cần thiết
+      const membersList = allMembers.map((member) => ({
+        userId: member.userId,
+      }));
+      this.eventService.emitGroupDissolved(
+        groupId,
+        group.name,
+        requestUserId,
+        membersList,
+      );
 
       this.logger.log(
         `Group ${groupId} was dissolved by user ${requestUserId}`,

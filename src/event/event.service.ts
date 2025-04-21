@@ -73,13 +73,17 @@ export class EventService {
     groupId: string,
     groupName: string,
     dissolvedById: string,
+    members: Array<{ userId: string }> = [],
   ): void {
-    this.logger.debug(`Emitting group.dissolved: ${groupId}`);
+    this.logger.debug(
+      `Emitting group.dissolved: ${groupId} with ${members.length} members`,
+    );
     this.eventEmitter.emit('group.dissolved', {
       groupId,
       groupName,
       dissolvedById,
       timestamp: new Date(),
+      members, // Truyền danh sách thành viên để tránh truy vấn database sau khi nhóm đã bị xóa
     });
   }
 

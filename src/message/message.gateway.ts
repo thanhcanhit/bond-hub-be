@@ -294,26 +294,47 @@ export class MessageGateway
    * @param message Tin nhắn đã được lưu vào database
    */
   notifyNewUserMessage(message: MessageData) {
-    const eventData = {
-      type: 'user',
-      message,
-      timestamp: new Date(),
+    // Đảm bảo tin nhắn có đầy đủ thông tin để phân biệt
+    const messageWithType = {
+      ...message,
+      messageType: 'USER', // Đảm bảo trường messageType luôn được đặt
     };
 
-    // Phát sự kiện đến người gửi
-    this.server.to(`user:${message.senderId}`).emit('newMessage', eventData);
+    const eventData = {
+      type: 'user',
+      message: messageWithType,
+      timestamp: new Date(),
+      isUserMessage: true, // Thêm trường để phân biệt rõ ràng hơn
+    };
 
-    // Phát sự kiện đến người nhận
-    if (message.receiverId) {
-      this.server
-        .to(`user:${message.receiverId}`)
-        .emit('newMessage', eventData);
+    if (this.server) {
+      try {
+        // Phát sự kiện đến người gửi
+        this.server
+          .to(`user:${message.senderId}`)
+          .emit('newMessage', eventData);
 
-      // Phát sự kiện dừng nhập
-      this.server.to(`user:${message.receiverId}`).emit('userTypingStopped', {
-        userId: message.senderId,
-        timestamp: new Date(),
-      });
+        // Phát sự kiện đến người nhận
+        if (message.receiverId) {
+          this.server
+            .to(`user:${message.receiverId}`)
+            .emit('newMessage', eventData);
+
+          // Phát sự kiện dừng nhập
+          this.server
+            .to(`user:${message.receiverId}`)
+            .emit('userTypingStopped', {
+              userId: message.senderId,
+              timestamp: new Date(),
+            });
+        }
+      } catch (error) {
+        this.logger.error(`Error sending user message event: ${error.message}`);
+      }
+    } else {
+      this.logger.warn(
+        'Socket.IO server not initialized yet, cannot send user message',
+      );
     }
   }
 
@@ -322,22 +343,43 @@ export class MessageGateway
    * @param message Tin nhắn đã được lưu vào database
    */
   notifyNewGroupMessage(message: MessageData) {
+    // Đảm bảo tin nhắn có đầy đủ thông tin để phân biệt
+    const messageWithType = {
+      ...message,
+      messageType: 'GROUP', // Đảm bảo trường messageType luôn được đặt
+    };
+
     const eventData = {
-      type: 'group',
-      message,
+      type: 'group', // Đánh dấu rõ ràng là tin nhắn nhóm
+      message: messageWithType,
       timestamp: new Date(),
+      isGroupMessage: true, // Thêm trường để phân biệt rõ ràng hơn
     };
 
     // Phát sự kiện đến phòng nhóm
     if (message.groupId) {
-      this.server.to(`group:${message.groupId}`).emit('newMessage', eventData);
+      if (this.server) {
+        try {
+          this.server
+            .to(`group:${message.groupId}`)
+            .emit('newMessage', eventData);
 
-      // Phát sự kiện dừng nhập
-      this.server.to(`group:${message.groupId}`).emit('userTypingStopped', {
-        userId: message.senderId,
-        groupId: message.groupId,
-        timestamp: new Date(),
-      });
+          // Phát sự kiện dừng nhập
+          this.server.to(`group:${message.groupId}`).emit('userTypingStopped', {
+            userId: message.senderId,
+            groupId: message.groupId,
+            timestamp: new Date(),
+          });
+        } catch (error) {
+          this.logger.error(
+            `Error sending group message event: ${error.message}`,
+          );
+        }
+      } else {
+        this.logger.warn(
+          'Socket.IO server not initialized yet, cannot send group message',
+        );
+      }
     }
   }
 
@@ -380,9 +422,15 @@ export class MessageGateway
       // Đối với tin nhắn nhóm
       else if (message.messageType === 'GROUP') {
         try {
-          this.server
-            .to(`group:${message.groupId}`)
-            .emit('messageRead', readEvent);
+          if (this.server) {
+            this.server
+              .to(`group:${message.groupId}`)
+              .emit('messageRead', readEvent);
+          } else {
+            this.logger.warn(
+              `Socket.IO server not initialized yet, cannot notify group ${message.groupId} about message read`,
+            );
+          }
         } catch (error) {
           this.logger.error(
             `Error notifying group ${message.groupId}: ${error.message}`,
@@ -406,20 +454,32 @@ export class MessageGateway
       timestamp: new Date(),
     };
 
-    // Đối với tin nhắn cá nhân
-    if (message.messageType === 'USER') {
-      this.server
-        .to(`user:${message.senderId}`)
-        .emit('messageRecalled', recallEvent);
-      this.server
-        .to(`user:${message.receiverId}`)
-        .emit('messageRecalled', recallEvent);
-    }
-    // Đối với tin nhắn nhóm
-    else if (message.messageType === 'GROUP') {
-      this.server
-        .to(`group:${message.groupId}`)
-        .emit('messageRecalled', recallEvent);
+    if (this.server) {
+      try {
+        // Đối với tin nhắn cá nhân
+        if (message.messageType === 'USER') {
+          this.server
+            .to(`user:${message.senderId}`)
+            .emit('messageRecalled', recallEvent);
+          this.server
+            .to(`user:${message.receiverId}`)
+            .emit('messageRecalled', recallEvent);
+        }
+        // Đối với tin nhắn nhóm
+        else if (message.messageType === 'GROUP') {
+          this.server
+            .to(`group:${message.groupId}`)
+            .emit('messageRecalled', recallEvent);
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error sending message recall event: ${error.message}`,
+        );
+      }
+    } else {
+      this.logger.warn(
+        'Socket.IO server not initialized yet, cannot send message recall event',
+      );
     }
   }
 
@@ -436,20 +496,32 @@ export class MessageGateway
       timestamp: new Date(),
     };
 
-    // Đối với tin nhắn cá nhân
-    if (message.messageType === 'USER') {
-      this.server
-        .to(`user:${message.senderId}`)
-        .emit('messageReactionUpdated', reactionEvent);
-      this.server
-        .to(`user:${message.receiverId}`)
-        .emit('messageReactionUpdated', reactionEvent);
-    }
-    // Đối với tin nhắn nhóm
-    else if (message.messageType === 'GROUP') {
-      this.server
-        .to(`group:${message.groupId}`)
-        .emit('messageReactionUpdated', reactionEvent);
+    if (this.server) {
+      try {
+        // Đối với tin nhắn cá nhân
+        if (message.messageType === 'USER') {
+          this.server
+            .to(`user:${message.senderId}`)
+            .emit('messageReactionUpdated', reactionEvent);
+          this.server
+            .to(`user:${message.receiverId}`)
+            .emit('messageReactionUpdated', reactionEvent);
+        }
+        // Đối với tin nhắn nhóm
+        else if (message.messageType === 'GROUP') {
+          this.server
+            .to(`group:${message.groupId}`)
+            .emit('messageReactionUpdated', reactionEvent);
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error sending message reaction update event: ${error.message}`,
+        );
+      }
+    } else {
+      this.logger.warn(
+        'Socket.IO server not initialized yet, cannot send message reaction update event',
+      );
     }
   }
 
@@ -466,8 +538,20 @@ export class MessageGateway
       timestamp: new Date(),
     };
 
-    // Chỉ thông báo cho người xóa tin nhắn
-    this.server.to(`user:${userId}`).emit('messageDeleted', deleteEvent);
+    if (this.server) {
+      try {
+        // Chỉ thông báo cho người xóa tin nhắn
+        this.server.to(`user:${userId}`).emit('messageDeleted', deleteEvent);
+      } catch (error) {
+        this.logger.error(
+          `Error sending message deleted event: ${error.message}`,
+        );
+      }
+    } else {
+      this.logger.warn(
+        'Socket.IO server not initialized yet, cannot send message deleted event',
+      );
+    }
   }
 
   @SubscribeMessage('typing')
@@ -576,11 +660,30 @@ export class MessageGateway
       }
     } else if (message.messageType === 'GROUP' && message.groupId) {
       // Đối với tin nhắn nhóm, phát đến phòng nhóm
-      this.server.to(`group:${message.groupId}`).emit('newMessage', {
-        type: 'group',
-        message,
-        timestamp: new Date(),
-      });
+      // Đảm bảo tin nhắn có đầy đủ thông tin để phân biệt
+      const messageWithType = {
+        ...message,
+        messageType: 'GROUP', // Đảm bảo trường messageType luôn được đặt
+      };
+
+      if (this.server) {
+        try {
+          this.server.to(`group:${message.groupId}`).emit('newMessage', {
+            type: 'group',
+            message: messageWithType,
+            timestamp: new Date(),
+            isGroupMessage: true, // Thêm trường để phân biệt rõ ràng hơn
+          });
+        } catch (error) {
+          this.logger.error(
+            `Error sending group message with media event: ${error.message}`,
+          );
+        }
+      } else {
+        this.logger.warn(
+          'Socket.IO server not initialized yet, cannot send group message with media',
+        );
+      }
     }
   }
 
@@ -609,12 +712,56 @@ export class MessageGateway
       );
 
       // Thông báo cho người dùng cập nhật danh sách nhóm của họ
-      this.server.to(`user:${userId}`).emit('updateGroupList', {
-        action: 'added_to_group',
-        groupId,
-        addedById,
-        timestamp: new Date(),
-      });
+      if (this.server) {
+        try {
+          this.server.to(`user:${userId}`).emit('updateGroupList', {
+            action: 'added_to_group',
+            groupId,
+            addedById,
+            timestamp: new Date(),
+          });
+        } catch (error) {
+          this.logger.error(
+            `Error sending updateGroupList event: ${error.message}`,
+          );
+
+          // Fallback: gửi trực tiếp đến các socket của người dùng
+          for (const socket of userSockets) {
+            try {
+              socket.emit('updateGroupList', {
+                action: 'added_to_group',
+                groupId,
+                addedById,
+                timestamp: new Date(),
+              });
+            } catch (socketError) {
+              this.logger.error(
+                `Error sending direct socket event: ${socketError.message}`,
+              );
+            }
+          }
+        }
+      } else {
+        this.logger.warn(
+          'Socket.IO server not initialized yet, sending direct to sockets',
+        );
+
+        // Fallback: gửi trực tiếp đến các socket của người dùng
+        for (const socket of userSockets) {
+          try {
+            socket.emit('updateGroupList', {
+              action: 'added_to_group',
+              groupId,
+              addedById,
+              timestamp: new Date(),
+            });
+          } catch (socketError) {
+            this.logger.error(
+              `Error sending direct socket event: ${socketError.message}`,
+            );
+          }
+        }
+      }
     }
 
     // Nếu người dùng không có socket nào đang kết nối, họ sẽ nhận được thông báo khi kết nối lại
@@ -707,14 +854,60 @@ export class MessageGateway
     groupName: string;
     dissolvedById: string;
     timestamp: Date;
+    members?: Array<{ userId: string }>;
   }): void {
-    const { groupId } = payload;
+    const { groupId, groupName, dissolvedById, timestamp, members } = payload;
     this.logger.debug(`Handling group.dissolved event: ${groupId}`);
 
     // Xóa phòng nhóm khỏi socket.io
     const roomName = `group:${groupId}`;
-    this.server.in(roomName).socketsLeave(roomName);
 
-    this.logger.debug(`All sockets removed from room ${roomName}`);
+    if (this.server) {
+      try {
+        this.server.in(roomName).socketsLeave(roomName);
+      } catch (error) {
+        this.logger.error(
+          `Error removing sockets from room ${roomName}: ${error.message}`,
+        );
+      }
+    } else {
+      this.logger.warn(
+        `Socket.IO server not initialized yet, cannot remove sockets from room ${roomName}`,
+      );
+    }
+
+    // Thông báo cho tất cả người dùng trong phòng cập nhật danh sách cuộc trò chuyện
+    if (members && members.length > 0) {
+      // Sử dụng danh sách thành viên từ payload
+      for (const member of members) {
+        // Không thông báo cho người giải tán
+        if (member.userId !== dissolvedById) {
+          if (this.server) {
+            try {
+              this.server
+                .to(`user:${member.userId}`)
+                .emit('updateConversationList', {
+                  action: 'group_dissolved',
+                  groupId,
+                  groupName,
+                  timestamp: timestamp || new Date(),
+                });
+            } catch (error) {
+              this.logger.error(
+                `Error sending updateConversationList event to user ${member.userId}: ${error.message}`,
+              );
+            }
+          } else {
+            this.logger.warn(
+              `Socket.IO server not initialized yet, cannot notify user ${member.userId} about group dissolution`,
+            );
+          }
+        }
+      }
+    }
+
+    this.logger.debug(
+      `All sockets removed from room ${roomName} and notifications sent`,
+    );
   }
 }
