@@ -97,6 +97,38 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
+  /**
+   * Handle joinUserRoom event from client
+   * @param client Socket client
+   * @param data Event data containing userId
+   */
+  @SubscribeMessage('joinUserRoom')
+  async handleJoinUserRoomEvent(
+    client: Socket,
+    data: { userId: string },
+  ): Promise<void> {
+    const { userId } = data;
+    this.logger.debug(`Received joinUserRoom event: userId=${userId}`);
+
+    // Add the user to our userSockets map
+    if (!this.userSockets.has(userId)) {
+      this.userSockets.set(userId, new Set());
+    }
+    this.userSockets.get(userId).add(client);
+
+    // Join the user to their personal room
+    client.join(`user:${userId}`);
+
+    // Confirm to the client
+    client.emit('joinedUserRoom', {
+      success: true,
+      userId,
+      timestamp: new Date()
+    });
+
+    this.logger.debug(`User ${userId} joined personal room user:${userId}`);
+  }
+
   async handleConnection(client: Socket): Promise<void> {
     this.logger.debug(`Client connected: ${client.id}`);
 
