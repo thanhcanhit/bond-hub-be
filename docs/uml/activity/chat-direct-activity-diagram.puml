@@ -1,0 +1,156 @@
+@startuml Chat Đơn - Activity Diagram
+
+skinparam backgroundColor white
+skinparam activityFontSize 14
+skinparam activityFontName Arial
+skinparam ArrowFontSize 12
+skinparam ArrowFontName Arial
+skinparam ActivityBorderColor #2C3E50
+skinparam ActivityBackgroundColor #ECF0F1
+skinparam ActivityDiamondBackgroundColor #ECF0F1
+skinparam ActivityDiamondBorderColor #2C3E50
+skinparam NoteBackgroundColor #FFEB3B
+skinparam NoteBorderColor #FBC02D
+
+title Luồng Xử Lý Chat Đơn (Direct Message)
+
+|Người Dùng A|
+start
+:Đăng nhập vào hệ thống;
+:Kết nối WebSocket;
+note right: Kết nối tới namespace /message
+
+|Hệ Thống|
+:Xác thực người dùng;
+:Tạo kết nối WebSocket;
+:Thêm người dùng vào phòng cá nhân (user:userId);
+
+|Người Dùng A|
+:Mở danh sách cuộc trò chuyện;
+
+|Hệ Thống|
+:Gọi API GET /messages/conversations;
+:Truy vấn danh sách cuộc trò chuyện từ database;
+:Trả về danh sách cuộc trò chuyện;
+
+|Người Dùng A|
+:Chọn người dùng B để chat;
+
+|Hệ Thống|
+:Gọi API GET /messages/user/:userIdB;
+:Truy vấn lịch sử tin nhắn từ database;
+:Trả về lịch sử tin nhắn;
+
+|Người Dùng A|
+:Nhập tin nhắn;
+:Bắt đầu gõ tin nhắn;
+
+|Hệ Thống|
+:Gửi sự kiện "typing" qua WebSocket;
+:Phát sự kiện "userTyping" đến người dùng B;
+
+|Người Dùng B|
+:Nhận sự kiện "userTyping";
+:Hiển thị trạng thái "đang gõ";
+
+|Người Dùng A|
+:Dừng gõ tin nhắn;
+
+|Hệ Thống|
+:Gửi sự kiện "stopTyping" qua WebSocket;
+:Phát sự kiện "userTypingStopped" đến người dùng B;
+
+|Người Dùng B|
+:Nhận sự kiện "userTypingStopped";
+:Ẩn trạng thái "đang gõ";
+
+|Người Dùng A|
+:Gửi tin nhắn;
+
+|Hệ Thống|
+if (Có file đính kèm?) then (Có)
+  :Gọi API POST /messages/user với FormData;
+  :Upload file lên storage;
+else (Không)
+  :Gọi API POST /messages/user với JSON;
+endif
+:Lưu tin nhắn vào database;
+:Gọi MessageGateway.notifyNewUserMessage();
+:Phát sự kiện "newMessage" đến phòng của người gửi và người nhận;
+
+|Người Dùng A|
+:Nhận sự kiện "newMessage";
+:Hiển thị tin nhắn đã gửi;
+
+|Người Dùng B|
+:Nhận sự kiện "newMessage";
+:Hiển thị tin nhắn mới;
+:Cập nhật danh sách cuộc trò chuyện;
+
+|Người Dùng B|
+:Đọc tin nhắn;
+
+|Hệ Thống|
+:Gọi API PATCH /messages/read/:messageId;
+:Cập nhật trạng thái đã đọc trong database;
+:Phát sự kiện "messageRead" đến người gửi;
+
+|Người Dùng A|
+:Nhận sự kiện "messageRead";
+:Cập nhật trạng thái đã đọc của tin nhắn;
+
+|Người Dùng A|
+if (Muốn thu hồi tin nhắn?) then (Có)
+  :Chọn thu hồi tin nhắn;
+  
+  |Hệ Thống|
+  :Gọi API PATCH /messages/recall/:messageId;
+  :Cập nhật trạng thái thu hồi trong database;
+  :Phát sự kiện "messageRecalled" đến người gửi và người nhận;
+  
+  |Người Dùng A|
+  :Nhận sự kiện "messageRecalled";
+  :Hiển thị tin nhắn đã thu hồi;
+  
+  |Người Dùng B|
+  :Nhận sự kiện "messageRecalled";
+  :Hiển thị tin nhắn đã thu hồi;
+else (Không)
+endif
+
+|Người Dùng A|
+if (Muốn thêm phản ứng?) then (Có)
+  :Chọn phản ứng cho tin nhắn;
+  
+  |Hệ Thống|
+  :Gọi API POST /messages/reaction;
+  :Lưu phản ứng vào database;
+  :Phát sự kiện "messageReaction" đến người gửi và người nhận;
+  
+  |Người Dùng A|
+  :Nhận sự kiện "messageReaction";
+  :Hiển thị phản ứng mới;
+  
+  |Người Dùng B|
+  :Nhận sự kiện "messageReaction";
+  :Hiển thị phản ứng mới;
+else (Không)
+endif
+
+|Người Dùng A|
+:Đóng cuộc trò chuyện;
+
+|Hệ Thống|
+:Giữ kết nối WebSocket;
+note right: Kết nối vẫn duy trì để nhận thông báo mới
+
+|Người Dùng A|
+:Đăng xuất;
+
+|Hệ Thống|
+:Ngắt kết nối WebSocket;
+:Xóa socket khỏi danh sách;
+
+stop
+
+@enduml

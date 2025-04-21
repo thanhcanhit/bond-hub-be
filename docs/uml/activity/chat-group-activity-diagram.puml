@@ -1,0 +1,261 @@
+@startuml Chat Nhóm - Activity Diagram
+
+skinparam backgroundColor white
+skinparam activityFontSize 14
+skinparam activityFontName Arial
+skinparam ArrowFontSize 12
+skinparam ArrowFontName Arial
+skinparam ActivityBorderColor #2C3E50
+skinparam ActivityBackgroundColor #ECF0F1
+skinparam ActivityDiamondBackgroundColor #ECF0F1
+skinparam ActivityDiamondBorderColor #2C3E50
+skinparam NoteBackgroundColor #FFEB3B
+skinparam NoteBorderColor #FBC02D
+
+title Luồng Xử Lý Chat Nhóm (Group Message)
+
+|Người Dùng A|
+start
+:Đăng nhập vào hệ thống;
+:Kết nối WebSocket;
+note right: Kết nối tới namespace /message và /groups
+
+|Hệ Thống|
+:Xác thực người dùng;
+:Tạo kết nối WebSocket;
+:Thêm người dùng vào phòng cá nhân (user:userId);
+:Thêm người dùng vào các phòng nhóm (group:groupId);
+
+|Người Dùng A|
+if (Tạo nhóm mới?) then (Có)
+  :Chọn tạo nhóm mới;
+  :Nhập tên nhóm;
+  :Chọn ảnh đại diện (tùy chọn);
+  :Chọn thành viên ban đầu;
+  
+  |Hệ Thống|
+  :Gọi API POST /groups với FormData;
+  :Upload ảnh đại diện (nếu có);
+  :Tạo nhóm trong database;
+  :Thêm người tạo làm LEADER;
+  :Thêm các thành viên ban đầu;
+  :Phát sự kiện "memberAdded" cho mỗi thành viên;
+  :Thông báo cho các thành viên qua GroupGateway;
+  
+  |Người Dùng A|
+  :Nhận thông báo nhóm đã được tạo;
+else (Không)
+  :Mở danh sách cuộc trò chuyện;
+  
+  |Hệ Thống|
+  :Gọi API GET /messages/conversations;
+  :Truy vấn danh sách cuộc trò chuyện từ database;
+  :Trả về danh sách cuộc trò chuyện (bao gồm nhóm);
+endif
+
+|Người Dùng A|
+:Chọn nhóm để chat;
+
+|Hệ Thống|
+:Gọi API GET /messages/group/:groupId;
+:Truy vấn lịch sử tin nhắn nhóm từ database;
+:Trả về lịch sử tin nhắn nhóm;
+
+|Người Dùng A|
+:Nhập tin nhắn;
+:Bắt đầu gõ tin nhắn;
+
+|Hệ Thống|
+:Gửi sự kiện "typing" qua WebSocket với groupId;
+:Phát sự kiện "userTyping" đến phòng nhóm;
+
+|Các Thành Viên Nhóm|
+:Nhận sự kiện "userTyping";
+:Hiển thị trạng thái "đang gõ" của Người Dùng A;
+
+|Người Dùng A|
+:Dừng gõ tin nhắn;
+
+|Hệ Thống|
+:Gửi sự kiện "stopTyping" qua WebSocket với groupId;
+:Phát sự kiện "userTypingStopped" đến phòng nhóm;
+
+|Các Thành Viên Nhóm|
+:Nhận sự kiện "userTypingStopped";
+:Ẩn trạng thái "đang gõ" của Người Dùng A;
+
+|Người Dùng A|
+:Gửi tin nhắn;
+
+|Hệ Thống|
+if (Có file đính kèm?) then (Có)
+  :Gọi API POST /messages/group với FormData;
+  :Upload file lên storage;
+else (Không)
+  :Gọi API POST /messages/group với JSON;
+endif
+:Kiểm tra quyền thành viên nhóm;
+:Lưu tin nhắn vào database;
+:Gọi MessageGateway.notifyNewGroupMessage();
+:Phát sự kiện "newMessage" đến phòng nhóm;
+
+|Người Dùng A|
+:Nhận sự kiện "newMessage";
+:Hiển thị tin nhắn đã gửi;
+
+|Các Thành Viên Nhóm|
+:Nhận sự kiện "newMessage";
+:Hiển thị tin nhắn mới;
+:Cập nhật danh sách cuộc trò chuyện;
+
+|Thành Viên B|
+:Đọc tin nhắn;
+
+|Hệ Thống|
+:Gọi API PATCH /messages/read/:messageId;
+:Cập nhật trạng thái đã đọc trong database;
+:Phát sự kiện "messageRead" đến phòng nhóm;
+
+|Người Dùng A|
+:Nhận sự kiện "messageRead";
+:Cập nhật trạng thái đã đọc của tin nhắn;
+
+|Người Dùng A|
+if (Muốn thu hồi tin nhắn?) then (Có)
+  :Chọn thu hồi tin nhắn;
+  
+  |Hệ Thống|
+  :Gọi API PATCH /messages/recall/:messageId;
+  :Kiểm tra quyền thu hồi tin nhắn;
+  :Cập nhật trạng thái thu hồi trong database;
+  :Phát sự kiện "messageRecalled" đến phòng nhóm;
+  
+  |Người Dùng A|
+  :Nhận sự kiện "messageRecalled";
+  :Hiển thị tin nhắn đã thu hồi;
+  
+  |Các Thành Viên Nhóm|
+  :Nhận sự kiện "messageRecalled";
+  :Hiển thị tin nhắn đã thu hồi;
+else (Không)
+endif
+
+|Người Dùng A|
+if (Muốn thêm phản ứng?) then (Có)
+  :Chọn phản ứng cho tin nhắn;
+  
+  |Hệ Thống|
+  :Gọi API POST /messages/reaction;
+  :Lưu phản ứng vào database;
+  :Phát sự kiện "messageReaction" đến phòng nhóm;
+  
+  |Người Dùng A|
+  :Nhận sự kiện "messageReaction";
+  :Hiển thị phản ứng mới;
+  
+  |Các Thành Viên Nhóm|
+  :Nhận sự kiện "messageReaction";
+  :Hiển thị phản ứng mới;
+else (Không)
+endif
+
+|Người Dùng A|
+if (Quản lý nhóm?) then (Có)
+  if (Thêm thành viên?) then (Có)
+    :Chọn thêm thành viên;
+    :Chọn người dùng để thêm vào nhóm;
+    
+    |Hệ Thống|
+    :Gọi API POST /groups/members;
+    :Kiểm tra quyền thêm thành viên;
+    :Thêm thành viên vào database;
+    :Phát sự kiện "memberAdded" đến phòng nhóm;
+    :Thông báo cho thành viên mới qua GroupGateway;
+    
+    |Người Dùng A|
+    :Nhận thông báo thành viên đã được thêm;
+    
+    |Thành Viên Mới|
+    :Nhận thông báo đã được thêm vào nhóm;
+    :Nhóm xuất hiện trong danh sách cuộc trò chuyện;
+  else (Không)
+  endif
+  
+  if (Đuổi thành viên?) then (Có)
+    :Chọn đuổi thành viên;
+    :Chọn thành viên để đuổi;
+    
+    |Hệ Thống|
+    :Gọi API POST /groups/:groupId/members/:userId/kick;
+    :Kiểm tra quyền đuổi thành viên;
+    :Xóa thành viên khỏi database;
+    :Phát sự kiện "memberRemoved" đến phòng nhóm;
+    :Thông báo cho thành viên bị đuổi qua GroupGateway;
+    
+    |Người Dùng A|
+    :Nhận thông báo thành viên đã bị đuổi;
+    
+    |Thành Viên Bị Đuổi|
+    :Nhận thông báo đã bị đuổi khỏi nhóm;
+    :Nhóm biến mất khỏi danh sách cuộc trò chuyện;
+  else (Không)
+  endif
+  
+  if (Cập nhật thông tin nhóm?) then (Có)
+    :Chọn cập nhật thông tin nhóm;
+    :Nhập tên nhóm mới hoặc chọn ảnh mới;
+    
+    |Hệ Thống|
+    :Gọi API PATCH /groups/:id hoặc /groups/:id/avatar;
+    :Kiểm tra quyền cập nhật nhóm;
+    :Cập nhật thông tin nhóm trong database;
+    :Phát sự kiện "groupUpdated" hoặc "groupAvatarUpdated";
+    
+    |Người Dùng A|
+    :Nhận thông báo nhóm đã được cập nhật;
+    
+    |Các Thành Viên Nhóm|
+    :Nhận thông báo nhóm đã được cập nhật;
+    :Hiển thị thông tin nhóm mới;
+  else (Không)
+  endif
+  
+  if (Giải tán nhóm?) then (Có)
+    :Chọn giải tán nhóm;
+    
+    |Hệ Thống|
+    :Gọi API POST /groups/:groupId/dissolve;
+    :Kiểm tra quyền giải tán nhóm (chỉ LEADER);
+    :Xóa tất cả thành viên và nhóm khỏi database;
+    :Phát sự kiện "groupDissolved" đến tất cả thành viên;
+    
+    |Người Dùng A|
+    :Nhận thông báo nhóm đã bị giải tán;
+    :Nhóm biến mất khỏi danh sách cuộc trò chuyện;
+    
+    |Các Thành Viên Nhóm|
+    :Nhận thông báo nhóm đã bị giải tán;
+    :Nhóm biến mất khỏi danh sách cuộc trò chuyện;
+  else (Không)
+  endif
+else (Không)
+endif
+
+|Người Dùng A|
+:Đóng cuộc trò chuyện;
+
+|Hệ Thống|
+:Giữ kết nối WebSocket;
+note right: Kết nối vẫn duy trì để nhận thông báo mới
+
+|Người Dùng A|
+:Đăng xuất;
+
+|Hệ Thống|
+:Ngắt kết nối WebSocket;
+:Xóa socket khỏi danh sách;
+:Xóa người dùng khỏi các phòng nhóm;
+
+stop
+
+@enduml

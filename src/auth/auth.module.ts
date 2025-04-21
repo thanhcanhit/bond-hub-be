@@ -19,7 +19,7 @@ import { StorageModule } from '../storage/storage.module';
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: '30s',
+          expiresIn: '15m',
         },
       }),
       inject: [ConfigService],
