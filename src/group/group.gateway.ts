@@ -3,6 +3,7 @@ import {
   WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  SubscribeMessage,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Injectable, Logger } from '@nestjs/common';
@@ -60,6 +61,40 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
       'group.dissolved',
       this.handleGroupDissolved.bind(this),
     );
+  }
+
+  /**
+   * Handle joinGroup event from client
+   * @param client Socket client
+   * @param data Event data containing userId and groupId
+   */
+  @SubscribeMessage('joinGroup')
+  async handleJoinGroupEvent(
+    client: Socket,
+    data: { userId: string; groupId: string },
+  ): Promise<void> {
+    const { userId, groupId } = data;
+    this.logger.debug(`Received joinGroup event: userId=${userId}, groupId=${groupId}`);
+
+    // Add the user to our userSockets map
+    if (!this.userSockets.has(userId)) {
+      this.userSockets.set(userId, new Set());
+    }
+    this.userSockets.get(userId).add(client);
+
+    // Join the user to their personal room
+    client.join(`user:${userId}`);
+
+    // Join the user to the group room
+    await this.joinGroupRoom(userId, groupId);
+
+    // Confirm to the client
+    client.emit('joinedGroup', {
+      success: true,
+      groupId,
+      userId,
+      timestamp: new Date()
+    });
   }
 
   handleConnection(client: Socket): void {
