@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-sns": "^3.535.0",
+    "@google/generative-ai": "^0.24.1",
     "@nestjs/cache-manager": "^3.0.0",
     "@nestjs/common": "^11.0.9",
     "@nestjs/config": "^4.0.0",
@@ -47,6 +48,7 @@
     "@types/sharp": "^0.31.1",
     "@types/socket.io": "^3.0.1",
     "@types/twilio": "^3.19.2",
+    "ai": "^4.3.13",
     "axios": "^1.8.3",
     "bcrypt": "^5.1.1",
     "cache-manager": "^6.4.1",
