@@ -36,6 +36,8 @@ model User {
   sentMessages     Message[]      @relation(name: "SentMessage")
   receivedMessages Message[]      @relation(name: "ReceivedMessage")
   comments         Comment[]      @relation(name: "CommentToUser")
+  initiatedCalls   Call[]         @relation(name: "CallInitiator")
+  callParticipants CallParticipant[] @relation(name: "CallParticipantUser")
 
   @@map("users")
 }
@@ -117,6 +119,7 @@ model Group {
   createdAt DateTime      @default(now()) @map("created_at")
   members   GroupMember[] @relation(name: "GroupToGroupMember")
   messages  Message[]     @relation(name: "GroupMessages")
+  calls     Call[]        @relation(name: "GroupCalls")
 
   @@map("groups")
 }
@@ -325,5 +328,49 @@ enum ReactionType {
   WOW
   SAD
   ANGRY
+}
+
+enum CallType {
+  AUDIO
+  VIDEO
+}
+
+enum CallStatus {
+  RINGING
+  ONGOING
+  ENDED
+  MISSED
+  REJECTED
+}
+
+model Call {
+  id            String           @id @default(uuid()) @map("call_id") @db.Uuid
+  initiatorId   String           @map("initiator_id") @db.Uuid
+  initiator     User             @relation(name: "CallInitiator", fields: [initiatorId], references: [id])
+  groupId       String?          @map("group_id") @db.Uuid
+  group         Group?           @relation(name: "GroupCalls", fields: [groupId], references: [id])
+  type          CallType         @default(AUDIO)
+  status        CallStatus       @default(RINGING)
+  startedAt     DateTime         @default(now()) @map("started_at")
+  endedAt       DateTime?        @map("ended_at")
+  duration      Int?             @map("duration_seconds")
+  participants  CallParticipant[] @relation(name: "CallToParticipant")
+  roomId        String           @unique @map("room_id")
+
+  @@map("calls")
+}
+
+model CallParticipant {
+  id            String           @id @default(uuid()) @map("participant_id") @db.Uuid
+  callId        String           @map("call_id") @db.Uuid
+  call          Call             @relation(name: "CallToParticipant", fields: [callId], references: [id], onDelete: Cascade)
+  userId        String           @map("user_id") @db.Uuid
+  user          User             @relation(name: "CallParticipantUser", fields: [userId], references: [id])
+  joinedAt      DateTime         @default(now()) @map("joined_at")
+  leftAt        DateTime?        @map("left_at")
+  status        String           @default("connected") // connected, disconnected
+
+  @@unique([callId, userId])
+  @@map("call_participants")
 }
 

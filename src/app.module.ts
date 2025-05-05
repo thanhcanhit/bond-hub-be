@@ -12,6 +12,7 @@ import { StorageModule } from './storage/storage.module';
 import { FriendModule } from './friend/friend.module';
 import { ContactModule } from './contact/contact.module';
 import { EventModule } from './event/event.module';
+import { CallModule } from './call/call.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { EventModule } from './event/event.module';
     StorageModule,
     FriendModule,
     ContactModule,
+    CallModule,
   ],
   controllers: [AppController],
   providers: [AppService],
