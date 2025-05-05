@@ -25,12 +25,15 @@ export class EventService {
     groupId: string,
     userId: string,
     removedById: string,
+    options: { kicked?: boolean; left?: boolean } = {},
   ): void {
     this.logger.debug(`Emitting group.member.removed: ${groupId}, ${userId}`);
     this.eventEmitter.emit('group.member.removed', {
       groupId,
       userId,
       removedById,
+      kicked: options.kicked,
+      left: options.left,
     });
   }
 
@@ -73,13 +76,17 @@ export class EventService {
     groupId: string,
     groupName: string,
     dissolvedById: string,
+    members: Array<{ userId: string }> = [],
   ): void {
-    this.logger.debug(`Emitting group.dissolved: ${groupId}`);
+    this.logger.debug(
+      `Emitting group.dissolved: ${groupId} with ${members.length} members`,
+    );
     this.eventEmitter.emit('group.dissolved', {
       groupId,
       groupName,
       dissolvedById,
       timestamp: new Date(),
+      members, // Truyền danh sách thành viên để tránh truy vấn database sau khi nhóm đã bị xóa
     });
   }
 

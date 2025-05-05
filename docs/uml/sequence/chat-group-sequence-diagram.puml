@@ -1,0 +1,265 @@
+@startuml Chat Nhóm - Sequence Diagram
+
+skinparam backgroundColor white
+skinparam sequenceFontSize 14
+skinparam sequenceFontName Arial
+skinparam ArrowFontSize 12
+skinparam ArrowFontName Arial
+skinparam ParticipantBorderColor #2C3E50
+skinparam ParticipantBackgroundColor #ECF0F1
+skinparam NoteBackgroundColor #FFEB3B
+skinparam NoteBorderColor #FBC02D
+
+title Luồng Xử Lý Chat Nhóm (Group Message)
+
+actor "Người Dùng A\n(Leader)" as UserA
+actor "Người Dùng B\n(Thành viên)" as UserB
+actor "Người Dùng C\n(Thành viên)" as UserC
+boundary "Frontend A" as FrontendA
+boundary "Frontend B" as FrontendB
+boundary "Frontend C" as FrontendC
+control "MessageController" as MsgController
+control "GroupController" as GroupController
+entity "MessageService" as MsgService
+entity "GroupService" as GroupService
+database "Database" as DB
+queue "WebSocket" as WS
+collections "MessageGateway" as MsgGateway
+collections "GroupGateway" as GroupGateway
+entity "StorageService" as Storage
+entity "EventService" as EventService
+
+note over FrontendA, FrontendC
+  Người dùng đã đăng nhập và có JWT token
+  JWT token được gửi kèm trong mọi request
+  WebSocket đã kết nối với namespace /message và /groups
+  và xác thực thông qua JWT token
+end note
+
+== Tạo Nhóm Mới ==
+
+UserA -> FrontendA: Chọn tạo nhóm mới
+UserA -> FrontendA: Nhập tên nhóm và chọn ảnh đại diện
+UserA -> FrontendA: Chọn thành viên ban đầu (B và C)
+FrontendA -> GroupController: POST /groups (FormData)
+GroupController -> GroupService: create()
+GroupService -> Storage: uploadFiles() (nếu có ảnh đại diện)
+Storage --> GroupService: Trả về URL của ảnh đã upload
+GroupService -> DB: Tạo nhóm trong database
+GroupService -> DB: Thêm người tạo làm LEADER
+GroupService -> DB: Thêm các thành viên ban đầu
+DB --> GroupService: Trả về nhóm đã tạo
+GroupService -> GroupGateway: notifyMemberAdded() cho mỗi thành viên
+GroupGateway -> WS: Phát sự kiện "addedToGroup" đến phòng user:userIdB
+GroupGateway -> WS: Phát sự kiện "addedToGroup" đến phòng user:userIdC
+GroupService -> EventService: emitGroupMemberAdded() cho mỗi thành viên
+EventService -> MsgGateway: handleGroupMemberAdded()
+MsgGateway -> MsgGateway: Thêm thành viên vào phòng nhóm (group:groupId)
+GroupService --> GroupController: Trả về nhóm đã tạo
+GroupController --> FrontendA: Trả về nhóm đã tạo
+FrontendA --> UserA: Hiển thị nhóm đã được tạo
+
+WS -> FrontendB: Nhận sự kiện "addedToGroup"
+FrontendB -> UserB: Thông báo đã được thêm vào nhóm
+WS -> FrontendC: Nhận sự kiện "addedToGroup"
+FrontendC -> UserC: Thông báo đã được thêm vào nhóm
+
+== Lấy Danh Sách Cuộc Trò Chuyện ==
+
+UserA -> FrontendA: Mở danh sách cuộc trò chuyện
+FrontendA -> MsgController: GET /messages/conversations
+MsgController -> MsgService: getConversationList()
+MsgService -> DB: Truy vấn danh sách cuộc trò chuyện (bao gồm nhóm)
+DB --> MsgService: Trả về dữ liệu
+MsgService --> MsgController: Trả về danh sách cuộc trò chuyện
+MsgController --> FrontendA: Trả về danh sách cuộc trò chuyện
+FrontendA --> UserA: Hiển thị danh sách cuộc trò chuyện
+
+== Lấy Lịch Sử Tin Nhắn Nhóm ==
+
+UserA -> FrontendA: Chọn nhóm để chat
+FrontendA -> MsgController: GET /messages/group/:groupId
+MsgController -> MsgService: getGroupMessages()
+MsgService -> DB: Truy vấn lịch sử tin nhắn nhóm
+DB --> MsgService: Trả về dữ liệu
+MsgService --> MsgController: Trả về lịch sử tin nhắn nhóm
+MsgController --> FrontendA: Trả về lịch sử tin nhắn nhóm
+FrontendA --> UserA: Hiển thị lịch sử tin nhắn nhóm
+
+== Trạng Thái Đang Gõ ==
+
+UserA -> FrontendA: Bắt đầu gõ tin nhắn
+FrontendA -> WS: Gửi sự kiện "typing" (groupId: groupId)
+WS -> MsgGateway: handleTyping()
+MsgGateway -> MsgGateway: Lấy userId từ socket
+MsgGateway -> WS: Phát sự kiện "userTyping" đến phòng group:groupId
+WS -> FrontendB: Nhận sự kiện "userTyping"
+FrontendB -> UserB: Hiển thị trạng thái "đang gõ" của Người Dùng A
+WS -> FrontendC: Nhận sự kiện "userTyping"
+FrontendC -> UserC: Hiển thị trạng thái "đang gõ" của Người Dùng A
+
+UserA -> FrontendA: Dừng gõ tin nhắn
+FrontendA -> WS: Gửi sự kiện "stopTyping" (groupId: groupId)
+WS -> MsgGateway: handleStopTyping()
+MsgGateway -> MsgGateway: Lấy userId từ socket
+MsgGateway -> WS: Phát sự kiện "userTypingStopped" đến phòng group:groupId
+WS -> FrontendB: Nhận sự kiện "userTypingStopped"
+FrontendB -> UserB: Ẩn trạng thái "đang gõ" của Người Dùng A
+WS -> FrontendC: Nhận sự kiện "userTypingStopped"
+FrontendC -> UserC: Ẩn trạng thái "đang gõ" của Người Dùng A
+
+== Gửi Tin Nhắn Nhóm Không Có File Đính Kèm ==
+
+UserA -> FrontendA: Gửi tin nhắn văn bản
+FrontendA -> MsgController: POST /messages/group (JSON)
+MsgController -> MsgService: createGroupMessage()
+MsgService -> DB: Kiểm tra quyền thành viên nhóm
+DB --> MsgService: Xác nhận quyền
+MsgService -> DB: Lưu tin nhắn vào database
+DB --> MsgService: Trả về tin nhắn đã lưu
+MsgService -> MsgGateway: notifyNewGroupMessage()
+MsgGateway -> WS: Phát sự kiện "newMessage" đến phòng group:groupId
+MsgGateway -> WS: Phát sự kiện "newMessage" đến phòng user:userIdA (đảm bảo người gửi nhận được)
+WS -> FrontendA: Nhận sự kiện "newMessage"
+FrontendA -> UserA: Hiển thị tin nhắn đã gửi
+WS -> FrontendB: Nhận sự kiện "newMessage"
+FrontendB -> UserB: Hiển thị tin nhắn mới
+WS -> FrontendC: Nhận sự kiện "newMessage"
+FrontendC -> UserC: Hiển thị tin nhắn mới
+MsgService --> MsgController: Trả về tin nhắn đã tạo
+MsgController --> FrontendA: Trả về tin nhắn đã tạo
+
+== Gửi Tin Nhắn Nhóm Có File Đính Kèm ==
+
+UserA -> FrontendA: Gửi tin nhắn có file đính kèm
+FrontendA -> MsgController: POST /messages/group (FormData)
+MsgController -> MsgService: createGroupMessageWithMedia()
+MsgService -> DB: Kiểm tra quyền thành viên nhóm
+DB --> MsgService: Xác nhận quyền
+MsgService -> Storage: uploadFiles()
+Storage --> MsgService: Trả về URL của file đã upload
+MsgService -> DB: Lưu tin nhắn với URL file vào database
+DB --> MsgService: Trả về tin nhắn đã lưu
+MsgService -> MsgGateway: notifyNewGroupMessage()
+MsgGateway -> WS: Phát sự kiện "newMessage" đến phòng group:groupId
+MsgGateway -> WS: Phát sự kiện "newMessage" đến phòng user:userIdA (đảm bảo người gửi nhận được)
+WS -> FrontendA: Nhận sự kiện "newMessage"
+FrontendA -> UserA: Hiển thị tin nhắn đã gửi
+WS -> FrontendB: Nhận sự kiện "newMessage"
+FrontendB -> UserB: Hiển thị tin nhắn mới
+WS -> FrontendC: Nhận sự kiện "newMessage"
+FrontendC -> UserC: Hiển thị tin nhắn mới
+MsgService --> MsgController: Trả về tin nhắn đã tạo
+MsgController --> FrontendA: Trả về tin nhắn đã tạo
+
+== Đánh Dấu Đã Đọc ==
+
+UserB -> FrontendB: Đọc tin nhắn
+FrontendB -> MsgController: PATCH /messages/read/:messageId
+MsgController -> MsgService: markMessageAsRead()
+MsgService -> DB: Cập nhật trạng thái đã đọc
+DB --> MsgService: Trả về tin nhắn đã cập nhật
+MsgService -> MsgGateway: notifyMessageRead()
+MsgGateway -> WS: Phát sự kiện "messageRead" đến phòng group:groupId
+WS -> FrontendA: Nhận sự kiện "messageRead"
+FrontendA -> UserA: Cập nhật trạng thái đã đọc
+WS -> FrontendC: Nhận sự kiện "messageRead"
+FrontendC -> UserC: Cập nhật trạng thái đã đọc
+MsgService --> MsgController: Trả về tin nhắn đã cập nhật
+MsgController --> FrontendB: Trả về tin nhắn đã cập nhật
+
+== Quản Lý Nhóm: Thêm Thành Viên ==
+
+UserA -> FrontendA: Chọn thêm thành viên mới
+FrontendA -> GroupController: POST /groups/members
+GroupController -> GroupService: addMember()
+GroupService -> DB: Kiểm tra quyền thêm thành viên
+DB --> GroupService: Xác nhận quyền
+GroupService -> DB: Thêm thành viên vào database
+DB --> GroupService: Trả về thành viên đã thêm
+GroupService -> GroupGateway: notifyMemberAdded()
+GroupGateway -> WS: Phát sự kiện "memberAdded" đến phòng group:groupId
+GroupGateway -> WS: Phát sự kiện "addedToGroup" đến phòng user:newUserId
+GroupService -> EventService: emitGroupMemberAdded()
+EventService -> MsgGateway: handleGroupMemberAdded()
+MsgGateway -> MsgGateway: Thêm thành viên mới vào phòng nhóm (group:groupId)
+GroupService --> GroupController: Trả về thành viên đã thêm
+GroupController --> FrontendA: Trả về thành viên đã thêm
+FrontendA --> UserA: Hiển thị thành viên đã được thêm
+
+== Quản Lý Nhóm: Đuổi Thành Viên ==
+
+UserA -> FrontendA: Chọn đuổi thành viên
+FrontendA -> GroupController: POST /groups/:groupId/members/:userId/kick
+GroupController -> GroupService: kickMember()
+GroupService -> DB: Kiểm tra quyền đuổi thành viên
+DB --> GroupService: Xác nhận quyền
+GroupService -> DB: Xóa thành viên khỏi database
+DB --> GroupService: Xác nhận đã xóa
+GroupService -> GroupGateway: notifyMemberRemoved()
+GroupGateway -> WS: Phát sự kiện "memberRemoved" đến phòng group:groupId
+GroupGateway -> WS: Phát sự kiện "removedFromGroup" đến phòng user:kickedUserId
+GroupService -> EventService: emitGroupMemberRemoved()
+EventService -> MsgGateway: handleGroupMemberRemoved()
+MsgGateway -> MsgGateway: Xóa thành viên khỏi phòng nhóm (group:groupId)
+GroupService --> GroupController: Trả về kết quả
+GroupController --> FrontendA: Trả về kết quả
+FrontendA --> UserA: Hiển thị thành viên đã bị đuổi
+
+== Quản Lý Nhóm: Cập Nhật Thông Tin Nhóm ==
+
+UserA -> FrontendA: Chọn cập nhật thông tin nhóm
+FrontendA -> GroupController: PATCH /groups/:id hoặc /groups/:id/avatar
+GroupController -> GroupService: update() hoặc updateGroupAvatar()
+GroupService -> DB: Kiểm tra quyền cập nhật nhóm
+DB --> GroupService: Xác nhận quyền
+GroupService -> Storage: uploadFiles() (nếu cập nhật ảnh)
+Storage --> GroupService: Trả về URL của ảnh mới (nếu có)
+GroupService -> DB: Cập nhật thông tin nhóm trong database
+DB --> GroupService: Trả về nhóm đã cập nhật
+GroupService -> GroupGateway: notifyGroupUpdated() hoặc notifyGroupAvatarUpdated()
+GroupGateway -> WS: Phát sự kiện "groupUpdated" hoặc "groupAvatarUpdated" đến phòng group:groupId
+GroupService -> EventService: emitGroupUpdated() hoặc emitGroupAvatarUpdated()
+GroupService --> GroupController: Trả về nhóm đã cập nhật
+GroupController --> FrontendA: Trả về nhóm đã cập nhật
+FrontendA --> UserA: Hiển thị thông tin nhóm đã cập nhật
+
+WS -> FrontendB: Nhận sự kiện "groupUpdated" hoặc "groupAvatarUpdated"
+FrontendB -> UserB: Hiển thị thông tin nhóm mới
+WS -> FrontendC: Nhận sự kiện "groupUpdated" hoặc "groupAvatarUpdated"
+FrontendC -> UserC: Hiển thị thông tin nhóm mới
+
+== Quản Lý Nhóm: Giải Tán Nhóm ==
+
+UserA -> FrontendA: Chọn giải tán nhóm
+FrontendA -> GroupController: POST /groups/:groupId/dissolve
+GroupController -> GroupService: dissolveGroup()
+GroupService -> DB: Kiểm tra quyền giải tán nhóm (chỉ LEADER)
+DB --> GroupService: Xác nhận quyền
+GroupService -> DB: Xóa tất cả thành viên và nhóm khỏi database
+DB --> GroupService: Xác nhận đã xóa
+GroupService -> GroupGateway: notifyGroupDissolved() cho mỗi thành viên
+GroupGateway -> WS: Phát sự kiện "groupDissolved" đến phòng user:userIdB
+GroupGateway -> WS: Phát sự kiện "groupDissolved" đến phòng user:userIdC
+GroupService -> EventService: emitGroupDissolved()
+GroupService --> GroupController: Trả về kết quả
+GroupController --> FrontendA: Trả về kết quả
+FrontendA --> UserA: Hiển thị nhóm đã bị giải tán
+
+WS -> FrontendB: Nhận sự kiện "groupDissolved"
+FrontendB -> UserB: Thông báo nhóm đã bị giải tán
+WS -> FrontendC: Nhận sự kiện "groupDissolved"
+FrontendC -> UserC: Thông báo nhóm đã bị giải tán
+
+== Ngắt Kết Nối ==
+
+UserA -> FrontendA: Đóng ứng dụng
+FrontendA -> WS: Ngắt kết nối WebSocket
+WS -> MsgGateway: handleDisconnect() cho namespace /message
+MsgGateway -> MsgGateway: Xóa socket khỏi danh sách
+MsgGateway -> MsgGateway: Xóa khỏi phòng cá nhân và phòng nhóm
+WS -> GroupGateway: handleDisconnect() cho namespace /groups
+GroupGateway -> GroupGateway: Xóa socket khỏi danh sách
+GroupGateway -> GroupGateway: Xóa khỏi phòng cá nhân
+
+@enduml

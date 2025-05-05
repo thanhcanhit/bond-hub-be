@@ -1,0 +1,165 @@
+@startuml Chat Đơn - Sequence Diagram
+
+skinparam backgroundColor white
+skinparam sequenceFontSize 14
+skinparam sequenceFontName Arial
+skinparam ArrowFontSize 12
+skinparam ArrowFontName Arial
+skinparam ParticipantBorderColor #2C3E50
+skinparam ParticipantBackgroundColor #ECF0F1
+skinparam NoteBackgroundColor #FFEB3B
+skinparam NoteBorderColor #FBC02D
+
+title Luồng Xử Lý Chat Đơn (Direct Message)
+
+actor "Người Dùng A" as UserA
+actor "Người Dùng B" as UserB
+boundary "Frontend A" as FrontendA
+boundary "Frontend B" as FrontendB
+control "MessageController" as Controller
+entity "MessageService" as Service
+database "Database" as DB
+queue "WebSocket" as WS
+collections "MessageGateway" as Gateway
+entity "StorageService" as Storage
+
+note over FrontendA, FrontendB
+  Người dùng đã đăng nhập và có JWT token
+  JWT token được gửi kèm trong mọi request
+  WebSocket đã kết nối với namespace /message
+  và xác thực thông qua JWT token
+end note
+
+== Lấy Danh Sách Cuộc Trò Chuyện ==
+
+UserA -> FrontendA: Mở danh sách cuộc trò chuyện
+FrontendA -> Controller: GET /messages/conversations
+Controller -> Service: getConversationList()
+Service -> DB: Truy vấn danh sách cuộc trò chuyện
+DB --> Service: Trả về dữ liệu
+Service --> Controller: Trả về danh sách cuộc trò chuyện
+Controller --> FrontendA: Trả về danh sách cuộc trò chuyện
+FrontendA --> UserA: Hiển thị danh sách cuộc trò chuyện
+
+== Lấy Lịch Sử Tin Nhắn ==
+
+UserA -> FrontendA: Chọn người dùng B để chat
+FrontendA -> Controller: GET /messages/user/:userIdB
+Controller -> Service: getUserMessages()
+Service -> DB: Truy vấn lịch sử tin nhắn
+DB --> Service: Trả về dữ liệu
+Service --> Controller: Trả về lịch sử tin nhắn
+Controller --> FrontendA: Trả về lịch sử tin nhắn
+FrontendA --> UserA: Hiển thị lịch sử tin nhắn
+
+== Trạng Thái Đang Gõ ==
+
+UserA -> FrontendA: Bắt đầu gõ tin nhắn
+FrontendA -> WS: Gửi sự kiện "typing" (receiverId: userIdB)
+WS -> Gateway: handleTyping()
+Gateway -> Gateway: Lấy userId từ socket
+Gateway -> WS: Phát sự kiện "userTyping" đến phòng user:userIdB
+WS -> FrontendB: Nhận sự kiện "userTyping"
+FrontendB -> UserB: Hiển thị trạng thái "đang gõ"
+
+UserA -> FrontendA: Dừng gõ tin nhắn
+FrontendA -> WS: Gửi sự kiện "stopTyping" (receiverId: userIdB)
+WS -> Gateway: handleStopTyping()
+Gateway -> Gateway: Lấy userId từ socket
+Gateway -> WS: Phát sự kiện "userTypingStopped" đến phòng user:userIdB
+WS -> FrontendB: Nhận sự kiện "userTypingStopped"
+FrontendB -> UserB: Ẩn trạng thái "đang gõ"
+
+== Gửi Tin Nhắn Không Có File Đính Kèm ==
+
+UserA -> FrontendA: Gửi tin nhắn văn bản
+FrontendA -> Controller: POST /messages/user (JSON)
+Controller -> Service: createUserMessage()
+Service -> DB: Lưu tin nhắn vào database
+DB --> Service: Trả về tin nhắn đã lưu
+Service -> Gateway: notifyNewUserMessage()
+Gateway -> WS: Phát sự kiện "newMessage" đến phòng user:userIdA
+Gateway -> WS: Phát sự kiện "newMessage" đến phòng user:userIdB
+WS -> FrontendA: Nhận sự kiện "newMessage"
+FrontendA -> UserA: Hiển thị tin nhắn đã gửi
+WS -> FrontendB: Nhận sự kiện "newMessage"
+FrontendB -> UserB: Hiển thị tin nhắn mới
+Service --> Controller: Trả về tin nhắn đã tạo
+Controller --> FrontendA: Trả về tin nhắn đã tạo
+
+== Gửi Tin Nhắn Có File Đính Kèm ==
+
+UserA -> FrontendA: Gửi tin nhắn có file đính kèm
+FrontendA -> Controller: POST /messages/user (FormData)
+Controller -> Service: createUserMessageWithMedia()
+Service -> Storage: uploadFiles()
+Storage --> Service: Trả về URL của file đã upload
+Service -> DB: Lưu tin nhắn với URL file vào database
+DB --> Service: Trả về tin nhắn đã lưu
+Service -> Gateway: notifyNewUserMessage()
+Gateway -> WS: Phát sự kiện "newMessage" đến phòng user:userIdA
+Gateway -> WS: Phát sự kiện "newMessage" đến phòng user:userIdB
+WS -> FrontendA: Nhận sự kiện "newMessage"
+FrontendA -> UserA: Hiển thị tin nhắn đã gửi
+WS -> FrontendB: Nhận sự kiện "newMessage"
+FrontendB -> UserB: Hiển thị tin nhắn mới
+Service --> Controller: Trả về tin nhắn đã tạo
+Controller --> FrontendA: Trả về tin nhắn đã tạo
+
+== Đánh Dấu Đã Đọc ==
+
+UserB -> FrontendB: Đọc tin nhắn
+FrontendB -> Controller: PATCH /messages/read/:messageId
+Controller -> Service: markMessageAsRead()
+Service -> DB: Cập nhật trạng thái đã đọc
+DB --> Service: Trả về tin nhắn đã cập nhật
+Service -> Gateway: notifyMessageRead()
+Gateway -> WS: Phát sự kiện "messageRead" đến phòng user:userIdA
+WS -> FrontendA: Nhận sự kiện "messageRead"
+FrontendA -> UserA: Cập nhật trạng thái đã đọc
+Service --> Controller: Trả về tin nhắn đã cập nhật
+Controller --> FrontendB: Trả về tin nhắn đã cập nhật
+
+== Thu Hồi Tin Nhắn ==
+
+UserA -> FrontendA: Chọn thu hồi tin nhắn
+FrontendA -> Controller: PATCH /messages/recall/:messageId
+Controller -> Service: recallMessage()
+Service -> DB: Cập nhật trạng thái thu hồi
+DB --> Service: Trả về tin nhắn đã cập nhật
+Service -> Gateway: notifyMessageRecalled()
+Gateway -> WS: Phát sự kiện "messageRecalled" đến phòng user:userIdA
+Gateway -> WS: Phát sự kiện "messageRecalled" đến phòng user:userIdB
+WS -> FrontendA: Nhận sự kiện "messageRecalled"
+FrontendA -> UserA: Hiển thị tin nhắn đã thu hồi
+WS -> FrontendB: Nhận sự kiện "messageRecalled"
+FrontendB -> UserB: Hiển thị tin nhắn đã thu hồi
+Service --> Controller: Trả về tin nhắn đã cập nhật
+Controller --> FrontendA: Trả về tin nhắn đã cập nhật
+
+== Thêm Phản Ứng ==
+
+UserA -> FrontendA: Chọn phản ứng cho tin nhắn
+FrontendA -> Controller: POST /messages/reaction
+Controller -> Service: addReaction()
+Service -> DB: Lưu phản ứng vào database
+DB --> Service: Trả về phản ứng đã lưu
+Service -> Gateway: notifyMessageReaction()
+Gateway -> WS: Phát sự kiện "messageReaction" đến phòng user:userIdA
+Gateway -> WS: Phát sự kiện "messageReaction" đến phòng user:userIdB
+WS -> FrontendA: Nhận sự kiện "messageReaction"
+FrontendA -> UserA: Hiển thị phản ứng mới
+WS -> FrontendB: Nhận sự kiện "messageReaction"
+FrontendB -> UserB: Hiển thị phản ứng mới
+Service --> Controller: Trả về phản ứng đã tạo
+Controller --> FrontendA: Trả về phản ứng đã tạo
+
+== Ngắt Kết Nối ==
+
+UserA -> FrontendA: Đóng ứng dụng
+FrontendA -> WS: Ngắt kết nối WebSocket
+WS -> Gateway: handleDisconnect()
+Gateway -> Gateway: Xóa socket khỏi danh sách
+Gateway -> Gateway: Xóa khỏi phòng cá nhân
+
+@enduml

@@ -11,10 +11,17 @@ import { Injectable, Logger } from '@nestjs/common';
 
 @Injectable()
 @WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
   namespace: '/friends',
+  cors: {
+    origin: true, // Sử dụng true thay vì '*' để tương thích với cài đặt CORS của ứng dụng
+    credentials: true,
+  },
+  pingInterval: 30000, // 30 seconds
+  pingTimeout: 30000, // 30 seconds
+  transports: ['websocket', 'polling'], // Hỗ trợ cả WebSocket và polling để tăng độ tin cậy
+  allowUpgrades: true, // Cho phép nâng cấp từ polling lên websocket
+  connectTimeout: 60000, // Tăng thời gian timeout kết nối lên 60 giây
+  maxHttpBufferSize: 1e8, // Tăng kích thước buffer cho các tin nhắn lớn (100MB)
 })
 export class FriendGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -93,7 +100,9 @@ export class FriendGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(`user:${receiverId}`).emit('reload');
 
     // Log detailed information for debugging
-    this.logger.debug(`Emitting reload event to users ${senderId} and ${receiverId}`);
+    this.logger.debug(
+      `Emitting reload event to users ${senderId} and ${receiverId}`,
+    );
     this.logger.debug(`Active user sockets: ${this.userSockets.size}`);
 
     // Also try to emit directly to the sockets if they exist
@@ -101,13 +110,17 @@ export class FriendGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const receiverSockets = this.userSockets.get(receiverId);
 
     if (senderSockets && senderSockets.size > 0) {
-      senderSockets.forEach(socket => socket.emit('reload'));
-      this.logger.debug(`Emitted directly to ${senderSockets.size} sender sockets`);
+      senderSockets.forEach((socket) => socket.emit('reload'));
+      this.logger.debug(
+        `Emitted directly to ${senderSockets.size} sender sockets`,
+      );
     }
 
     if (receiverSockets && receiverSockets.size > 0) {
-      receiverSockets.forEach(socket => socket.emit('reload'));
-      this.logger.debug(`Emitted directly to ${receiverSockets.size} receiver sockets`);
+      receiverSockets.forEach((socket) => socket.emit('reload'));
+      this.logger.debug(
+        `Emitted directly to ${receiverSockets.size} receiver sockets`,
+      );
     }
 
     this.logger.log(
