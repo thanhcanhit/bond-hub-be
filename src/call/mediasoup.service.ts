@@ -91,9 +91,8 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
         },
       ],
       initialAvailableOutgoingBitrate: 1000000,
-      minimumAvailableOutgoingBitrate: 600000,
-      maxSctpMessageSize: 262144,
       maxIncomingBitrate: 1500000,
+      maxSctpMessageSize: 262144,
     },
   };
 
@@ -204,12 +203,22 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
     }
 
     const transport = await router.createWebRtcTransport({
-      listenIps: this.config.webRtcTransport.listenIps,
+      listenInfos: [
+        {
+          protocol: 'udp',
+          ip: this.config.webRtcTransport.listenIps[0].ip,
+          announcedAddress: this.config.webRtcTransport.listenIps[0].announcedIp,
+        },
+        {
+          protocol: 'tcp',
+          ip: this.config.webRtcTransport.listenIps[0].ip,
+          announcedAddress: this.config.webRtcTransport.listenIps[0].announcedIp,
+        },
+      ],
+      initialAvailableOutgoingBitrate: this.config.webRtcTransport.initialAvailableOutgoingBitrate,
       enableUdp: true,
       enableTcp: true,
       preferUdp: true,
-      initialAvailableOutgoingBitrate: this.config.webRtcTransport.initialAvailableOutgoingBitrate,
-      minimumAvailableOutgoingBitrate: this.config.webRtcTransport.minimumAvailableOutgoingBitrate,
     });
 
     const transportId = `${roomId}:${userId}:${direction}`;
@@ -221,7 +230,7 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
-    transport.on('close', () => {
+    transport.observer.on('close', () => {
       this.transports.delete(transportId);
     });
 
@@ -296,7 +305,7 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
       this.producers.delete(producer.id);
     });
 
-    producer.on('close', () => {
+    producer.observer.on('close', () => {
       this.producers.delete(producer.id);
     });
 
@@ -358,7 +367,7 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
       this.consumers.delete(consumer.id);
     });
 
-    consumer.on('close', () => {
+    consumer.observer.on('close', () => {
       this.consumers.delete(consumer.id);
     });
 
