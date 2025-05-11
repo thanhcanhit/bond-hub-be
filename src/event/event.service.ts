@@ -7,6 +7,16 @@ export class EventService {
 
   constructor(public readonly eventEmitter: EventEmitter2) {}
 
+  /**
+   * Emit a generic event
+   * @param event The event name
+   * @param data The event data
+   */
+  emitEvent(event: string, data: any): void {
+    this.logger.debug(`Emitting ${event}`);
+    this.eventEmitter.emit(event, data);
+  }
+
   // Group events
   emitGroupMemberAdded(
     groupId: string,
@@ -115,5 +125,81 @@ export class EventService {
   emitUserOffline(userId: string): void {
     this.logger.debug(`Emitting user.offline: ${userId}`);
     this.eventEmitter.emit('user.offline', { userId });
+  }
+
+  // Call events
+  emitCallIncoming(
+    callId: string,
+    initiatorId: string,
+    receiverId: string,
+    type: string,
+    roomId: string,
+    groupId?: string,
+  ): void {
+    this.logger.debug(`Emitting call.incoming: ${callId}`);
+    this.eventEmitter.emit('call.incoming', {
+      callId,
+      initiatorId,
+      receiverId,
+      groupId,
+      type,
+      roomId,
+    });
+  }
+
+  emitCallRejected(
+    callId: string,
+    initiatorId: string,
+    receiverId: string,
+    roomId: string,
+  ): void {
+    this.logger.debug(`Emitting call.rejected: ${callId}`);
+    this.eventEmitter.emit('call.rejected', {
+      callId,
+      initiatorId,
+      receiverId,
+      roomId,
+    });
+  }
+
+  emitCallEnded(
+    callId: string,
+    initiatorId: string,
+    roomId: string,
+    endedBy: string,
+  ): void {
+    this.logger.debug(`Emitting call.ended: ${callId}`);
+    this.eventEmitter.emit('call.ended', {
+      callId,
+      initiatorId,
+      roomId,
+      endedBy,
+    });
+  }
+
+  emitCallParticipantJoined(
+    callId: string,
+    userId: string,
+    roomId: string,
+  ): void {
+    this.logger.debug(`Emitting call.participant.joined: ${callId}, ${userId}`);
+    this.eventEmitter.emit('call.participant.joined', {
+      callId,
+      userId,
+      roomId,
+    });
+  }
+
+  emitCallParticipantLeft(
+    callId: string,
+    userId: string,
+    roomId: string,
+  ): void {
+    this.logger.debug(`Emitting call.participant.left: ${callId}, ${userId}`);
+    this.eventEmitter.emit('call.participant.left', {
+      callId,
+      userId,
+      roomId,
+    });
   }
 }
