@@ -74,7 +74,9 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
     data: { userId: string; groupId: string },
   ): Promise<void> {
     const { userId, groupId } = data;
-    this.logger.debug(`Received joinGroup event: userId=${userId}, groupId=${groupId}`);
+    this.logger.debug(
+      `Received joinGroup event: userId=${userId}, groupId=${groupId}`,
+    );
 
     // Add the user to our userSockets map
     if (!this.userSockets.has(userId)) {
@@ -93,7 +95,7 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
       success: true,
       groupId,
       userId,
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   }
 
@@ -123,7 +125,7 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.emit('joinedUserRoom', {
       success: true,
       userId,
-      timestamp: new Date()
+      timestamp: new Date(),
     });
 
     this.logger.debug(`User ${userId} joined personal room user:${userId}`);
@@ -134,7 +136,9 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     try {
       // Lấy userId từ token hoặc query params
-      const userId = client.handshake.auth?.userId || client.handshake.query?.userId as string;
+      const userId =
+        client.handshake.auth?.userId ||
+        (client.handshake.query?.userId as string);
 
       if (userId) {
         // Lưu trữ socket của người dùng
@@ -509,7 +513,9 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
         updateConversationList: data.updateConversationList !== false, // Mặc định là true
       };
 
-      this.logger.debug(`Attempting to notify user ${userId} about dissolution of group ${data.groupId}`);
+      this.logger.debug(
+        `Attempting to notify user ${userId} about dissolution of group ${data.groupId}`,
+      );
 
       // Phương pháp 1: Gửi trực tiếp đến tất cả socket của người dùng
       const userSockets = this.userSockets.get(userId);
@@ -517,10 +523,14 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // Emit to all user's sockets
         for (const socket of userSockets) {
           socket.emit('groupDissolved', notificationData);
-          this.logger.debug(`Emitted groupDissolved directly to socket ${socket.id}`);
+          this.logger.debug(
+            `Emitted groupDissolved directly to socket ${socket.id}`,
+          );
         }
       } else {
-        this.logger.debug(`No sockets found for user ${userId} in userSockets map`);
+        this.logger.debug(
+          `No sockets found for user ${userId} in userSockets map`,
+        );
       }
 
       // Phương pháp 2: Gửi đến phòng cá nhân của người dùng
@@ -533,7 +543,9 @@ export class GroupGateway implements OnGatewayConnection, OnGatewayDisconnect {
         ...notificationData,
         targetUserId: userId, // Thêm trường này để client có thể lọc
       });
-      this.logger.debug(`Broadcast groupDissolvedBroadcast to all clients with targetUserId=${userId}`);
+      this.logger.debug(
+        `Broadcast groupDissolvedBroadcast to all clients with targetUserId=${userId}`,
+      );
 
       // Gửi thêm sự kiện updateConversationList để đảm bảo frontend cập nhật danh sách
       this.server.to(`user:${userId}`).emit('updateConversationList', {
