@@ -31,13 +31,20 @@ RUN npm run build && ls -la dist
 FROM node:20-alpine AS production
 
 # Install PostgreSQL client, cron, and build dependencies
-RUN apk add --no-cache postgresql-client python3 make g++ cronie
+RUN apk add --no-cache postgresql-client python3 py3-pip make g++ linux-headers cronie && \
+    python3 -m venv /opt/venv && \
+    . /opt/venv/bin/activate && \
+    pip install --upgrade pip && \
+    pip install invoke
+
+# Set environment variables to use the virtual environment
+ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 
-# Copy package files and install ONLY production dependencies
+# Copy package files and install production dependencies with mediasoup
 COPY package*.json ./
-RUN npm install --omit=dev --ignore-scripts && \
+RUN npm install --omit=dev && \
     npm install -g ts-node typescript && \
     npm rebuild bcrypt --build-from-source
 
