@@ -13,9 +13,11 @@ RUN apk add --no-cache python3 py3-pip make g++ linux-headers && \
 # Set environment variables to use the virtual environment
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy package files and install ALL dependencies (including dev dependencies)
+# Copy package files and install dependencies without mediasoup
 COPY package*.json ./
-RUN npm install
+RUN npm install --omit=dev --ignore-scripts && \
+    npm install --no-save typescript ts-node && \
+    npm rebuild bcrypt --build-from-source
 
 # Copy Prisma schema and generate client
 COPY prisma ./prisma/
