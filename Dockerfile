@@ -45,9 +45,10 @@ WORKDIR /app
 # Copy package files and install production dependencies with mediasoup
 COPY package*.json ./
 RUN npm install -g husky && \
-    npm install --omit=dev --ignore-scripts && \
+    npm install --omit=dev && \
     npm install -g ts-node typescript && \
-    npm rebuild bcrypt --build-from-source
+    npm rebuild bcrypt --build-from-source && \
+    npm rebuild mediasoup --build-from-source
 
 # Copy Prisma files
 COPY prisma ./prisma/
