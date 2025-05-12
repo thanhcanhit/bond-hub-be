@@ -3,6 +3,9 @@ FROM node:20-alpine AS build-stage
 
 WORKDIR /app
 
+# Install Python and other build dependencies
+RUN apk add --no-cache python3 py3-pip make g++
+
 # Copy package files and install ALL dependencies (including dev dependencies)
 COPY package*.json ./
 RUN npm install
