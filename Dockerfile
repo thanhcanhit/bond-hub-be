@@ -4,7 +4,9 @@ FROM node:20-alpine AS build-stage
 WORKDIR /app
 
 # Install Python and other build dependencies
-RUN apk add --no-cache python3 py3-pip make g++
+RUN apk add --no-cache python3 py3-pip make g++ && \
+    python3 -m pip install --upgrade pip && \
+    python3 -m pip install invoke --root-user-action=ignore
 
 # Copy package files and install ALL dependencies (including dev dependencies)
 COPY package*.json ./
