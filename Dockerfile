@@ -4,7 +4,7 @@ FROM node:20-alpine AS build-stage
 WORKDIR /app
 
 # Install Python and other build dependencies with virtual environment setup
-RUN apk add --no-cache python3 py3-pip make g++ && \
+RUN apk add --no-cache python3 py3-pip make g++ linux-headers && \
     python3 -m venv /opt/venv && \
     . /opt/venv/bin/activate && \
     pip install --upgrade pip && \
