@@ -3,10 +3,15 @@ FROM node:20-alpine AS build-stage
 
 WORKDIR /app
 
-# Install Python and other build dependencies
+# Install Python and other build dependencies with virtual environment setup
 RUN apk add --no-cache python3 py3-pip make g++ && \
-    python3 -m pip install --upgrade pip && \
-    python3 -m pip install invoke --break-system-packages
+    python3 -m venv /opt/venv && \
+    . /opt/venv/bin/activate && \
+    pip install --upgrade pip && \
+    pip install invoke
+
+# Set environment variables to use the virtual environment
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy package files and install ALL dependencies (including dev dependencies)
 COPY package*.json ./
