@@ -3,9 +3,21 @@ FROM node:20-alpine AS build-stage
 
 WORKDIR /app
 
-# Copy package files and install ALL dependencies (including dev dependencies)
+# Install Python and other build dependencies with virtual environment setup
+RUN apk add --no-cache python3 py3-pip make g++ linux-headers && \
+    python3 -m venv /opt/venv && \
+    . /opt/venv/bin/activate && \
+    pip install --upgrade pip && \
+    pip install invoke
+
+# Set environment variables to use the virtual environment
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy package files and install dependencies without mediasoup
 COPY package*.json ./
-RUN npm install
+RUN npm install --omit=dev --ignore-scripts && \
+    npm install --no-save typescript ts-node && \
+    npm rebuild bcrypt --build-from-source
 
 # Copy Prisma schema and generate client
 COPY prisma ./prisma/
@@ -19,15 +31,24 @@ RUN npm run build && ls -la dist
 FROM node:20-alpine AS production
 
 # Install PostgreSQL client, cron, and build dependencies
-RUN apk add --no-cache postgresql-client python3 make g++ cronie
+RUN apk add --no-cache postgresql-client python3 py3-pip make g++ linux-headers cronie && \
+    python3 -m venv /opt/venv && \
+    . /opt/venv/bin/activate && \
+    pip install --upgrade pip && \
+    pip install invoke
+
+# Set environment variables to use the virtual environment
+ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 
-# Copy package files and install ONLY production dependencies
+# Copy package files and install production dependencies with mediasoup
 COPY package*.json ./
-RUN npm install --omit=dev --ignore-scripts && \
+RUN npm install -g husky && \
+    npm install --omit=dev && \
     npm install -g ts-node typescript && \
-    npm rebuild bcrypt --build-from-source
+    npm rebuild bcrypt --build-from-source && \
+    npm rebuild mediasoup --build-from-source
 
 # Copy Prisma files
 COPY prisma ./prisma/
