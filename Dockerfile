@@ -69,11 +69,7 @@ RUN npm install -g husky && \
     npm install --omit=dev && \
     npm install -g ts-node typescript && \
     npm rebuild bcrypt --build-from-source && \
-<<<<<<< HEAD
-    npm rebuild mediasoup --build-from-source
-=======
     npm install mediasoup@3.15.7 --build-from-source --verbose
->>>>>>> 5f94687 (Enhance Dockerfile to improve build and production stages by adding necessary build dependencies, including build-base and python3-dev, and updating npm installation commands for mediasoup. Additionally, refine WebSocket gateway settings for better connection management and logging, and introduce robust error handling in mediasoup service initialization.)
 
 # Copy Prisma files
 COPY prisma ./prisma/
