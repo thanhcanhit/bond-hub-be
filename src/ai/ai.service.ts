@@ -269,16 +269,18 @@ export class AiService {
       }
 
       // Prepare system instructions for super-concise summarization
-      const systemInstructions = `Bạn là chuyên gia tóm tắt siêu ngắn gọn. Nhiệm vụ: truyền tải ý chính và bối cảnh quan trọng của văn bản trong KHÔNG QUÁ ${maxLengthValue} ký tự.
+      const systemInstructions = `Bạn là chuyên gia tóm tắt thông minh. Nhiệm vụ: giúp người đọc HIỂU RÕ ngữ cảnh và nội dung chính của văn bản trong KHÔNG QUÁ ${maxLengthValue} ký tự.
 
-Quy tắc tóm tắt siêu ngắn gọn:
-- Nắm bắt TINH TÚY và Ý NGHĨA CHÍNH, bỏ qua chi tiết phụ
-- Dùng từ ngữ NGẮN GỌN, chính xác, cô đọng thông tin
-- Ưu tiên cấu trúc ngắn thay vì câu dài
-- Giữ lại số liệu quan trọng, từ khóa thiết yếu
-- Loại bỏ từ không cần thiết và từ ngữ mang tính hình thức
-- Bảo đảm tóm tắt có thể đứng độc lập, người đọc hiểu được nội dung chính
-- Tóm tắt bằng các ĐIỂM CHÍNH nếu phù hợp
+Quy tắc tóm tắt thông minh:
+- Tập trung vào việc truyền tải NGỮ CẢNH và Ý NGHĨA CHÍNH
+- Đảm bảo người đọc hiểu được BỐI CẢNH và MỐI LIÊN HỆ giữa các thông tin
+- Giữ lại các CHI TIẾT QUAN TRỌNG giúp hiểu rõ ngữ cảnh
+- Sử dụng từ ngữ RÕ RÀNG, DỄ HIỂU
+- Ưu tiên cấu trúc logic, mạch lạc
+- Giữ lại số liệu và từ khóa quan trọng
+- Loại bỏ thông tin thừa, không liên quan
+- KHÔNG thêm các câu mở đầu như "Được rồi", "Tôi sẽ", "Đây là tóm tắt"
+- Trả lời TRỰC TIẾP với nội dung cần thiết
 
 ${maxLengthInstructions} Viết bằng tiếng Việt nếu văn bản gốc là tiếng Việt.`;
 
@@ -397,7 +399,9 @@ ${maxLengthInstructions} Viết bằng tiếng Việt nếu văn bản gốc là
       - Sửa lỗi chính tả và ngữ pháp
       - Giữ nguyên ngôn ngữ của tin nhắn gốc (tiếng Việt hoặc tiếng Anh)
       - Không thay đổi thông tin thực tế hoặc thêm dữ liệu mới
-      - Giữ độ dài tương đương với tin nhắn gốc`;
+      - Giữ độ dài tương đương với tin nhắn gốc
+      - KHÔNG thêm các câu mở đầu như "Được rồi", "Tôi sẽ", "Đây là tin nhắn đã được cải thiện"
+      - Trả lời TRỰC TIẾP với nội dung cần thiết`;
 
       // Generate enhanced message without using system role
       const result = await model.generateContent({
@@ -467,7 +471,7 @@ ${maxLengthInstructions} Viết bằng tiếng Việt nếu văn bản gốc là
             role: 'user',
             parts: [
               {
-                text: `${systemPrompt}\n\n${prompt}`,
+                text: `${systemPrompt}\n\nLưu ý: Trả lời TRỰC TIẾP với nội dung cần thiết, KHÔNG thêm các câu mở đầu như "Được rồi", "Tôi sẽ", "Đây là câu trả lời".\n\n${prompt}`,
               },
             ],
           },
