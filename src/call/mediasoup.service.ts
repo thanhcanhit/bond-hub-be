@@ -97,13 +97,36 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
       initialAvailableOutgoingBitrate: 1000000,
       maxIncomingBitrate: 1500000,
       maxSctpMessageSize: 262144,
+      // Add more robust ICE settings
+      enableUdp: true,
+      enableTcp: true,
+      preferUdp: true,
+      // Set ICE configuration
+      iceTransportPolicy: 'all', // Can be 'all' or 'relay'
     },
   };
 
   constructor(private configService: ConfigService) {}
 
   async onModuleInit() {
-    await this.createWorkers();
+    try {
+      await this.createWorkers();
+    } catch (error) {
+      this.logger.error(`Failed to initialize mediasoup: ${error.message}`);
+      // Retry initialization after delay
+      setTimeout(() => this.retryInitialization(), 5000);
+    }
+  }
+
+  private async retryInitialization() {
+    this.logger.log('Retrying mediasoup initialization...');
+    try {
+      await this.createWorkers();
+      this.logger.log('Mediasoup initialized successfully after retry');
+    } catch (error) {
+      this.logger.error(`Failed to initialize mediasoup on retry: ${error.message}`);
+      // Exit or take other recovery action
+    }
   }
 
   async onModuleDestroy() {
@@ -242,6 +265,7 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
+<<<<<<< HEAD
     transport.observer.on('close', () => {
       this.transports.delete(transportId);
     });
@@ -255,6 +279,64 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
         dtlsParameters: transport.dtlsParameters,
       },
     };
+=======
+      // Sử dụng cấu hình mạnh mẽ hơn cho WebRTC transport
+      const transport = await router.createWebRtcTransport({
+        listenIps: [
+          {
+            ip: this.config.webRtcTransport.listenIps[0].ip,
+            announcedIp: this.config.webRtcTransport.listenIps[0].announcedIp,
+          },
+        ],
+        enableUdp: this.config.webRtcTransport.enableUdp,
+        enableTcp: this.config.webRtcTransport.enableTcp,
+        preferUdp: this.config.webRtcTransport.preferUdp,
+        initialAvailableOutgoingBitrate: this.config.webRtcTransport.initialAvailableOutgoingBitrate,
+      });
+
+      this.transports.set(transportId, transport);
+
+      // Theo dõi trạng thái chi tiết
+      transport.on('dtlsstatechange', (dtlsState) => {
+        this.logger.log(`Transport ${transport.id} dtls state changed to ${dtlsState}`);
+        if (dtlsState === 'closed' || dtlsState === 'failed') {
+          this.logger.warn(`Transport ${transport.id} closed/failed (DTLS state: ${dtlsState})`);
+          this.transports.delete(transportId);
+        }
+      });
+
+      transport.on('icestatechange', (iceState) => {
+        this.logger.log(`Transport ${transport.id} ice state changed to ${iceState}`);
+        if (iceState === 'disconnected' || iceState === 'closed') {
+          this.logger.warn(`Transport ${transport.id} ice state: ${iceState}`);
+        }
+      });
+
+      transport.on('sctpstatechange', (sctpState) => {
+        this.logger.log(`Transport ${transport.id} sctp state changed to ${sctpState}`);
+      });
+
+      transport.observer.on('close', () => {
+        this.logger.warn(`Transport ${transport.id} closed (observer)`);
+        this.transports.delete(transportId);
+      });
+
+      this.logger.log(`WebRTC transport created successfully: ${transport.id}`);
+
+      return {
+        transport,
+        params: {
+          id: transport.id,
+          iceParameters: transport.iceParameters,
+          iceCandidates: transport.iceCandidates,
+          dtlsParameters: transport.dtlsParameters,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Failed to create WebRTC transport: ${error.message}`);
+      throw error;
+    }
+>>>>>>> 5f94687 (Enhance Dockerfile to improve build and production stages by adding necessary build dependencies, including build-base and python3-dev, and updating npm installation commands for mediasoup. Additionally, refine WebSocket gateway settings for better connection management and logging, and introduce robust error handling in mediasoup service initialization.)
   }
 
   /**

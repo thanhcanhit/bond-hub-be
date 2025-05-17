@@ -384,3 +384,98 @@ Cấu hình mediasoup có thể được tùy chỉnh trong lớp `MediasoupServ
 - mediasoup: WebRTC SFU
 - socket.io: Thư viện WebSocket
 - uuid: Để tạo ID duy nhất
+
+# Hướng dẫn khắc phục sự cố WebRTC và MediaSoup
+
+## Các vấn đề thường gặp và cách giải quyết
+
+### 1. "WebSocket is closed before the connection is established"
+
+**Nguyên nhân:**
+- Kết nối WebSocket bị đóng trước khi thiết lập xong
+- CORS không được cấu hình đúng
+- Timeout quá ngắn
+
+**Giải pháp:**
+- Đảm bảo CORS đúng: `origin: '*'` hoặc domain cụ thể
+- Tăng thời gian timeout: `connectTimeout: 60000`
+- Sử dụng cả WebSocket và polling: `transports: ['websocket', 'polling']`
+- Thêm retry logic ở frontend
+
+### 2. "Socket or device not initialized, attempting to reconnect"
+
+**Nguyên nhân:**
+- Socket ID bị undefined
+- Device không được tạo đúng cách
+- Quá trình tạo transport bị lỗi
+
+**Giải pháp:**
+- Đảm bảo phần xác thực (authentication) đúng
+- Thêm thời gian chờ trước khi thử lại
+- Kiểm tra logs để xác định điểm lỗi cụ thể
+
+### 3. "Error creating send transport: Cannot read properties of null"
+
+**Nguyên nhân:**
+- MediaSoup workers không được khởi tạo
+- Router chưa được tạo
+- Thiếu các dependencies cần thiết
+
+**Giải pháp:**
+- Đảm bảo mediasoup workers đã được khởi tạo đúng cách
+- Tự động tạo router khi cần
+- Thêm retry logic khi tạo transport
+
+## Cấu hình môi trường cần thiết
+
+```env
+# MediaSoup
+MEDIASOUP_ANNOUNCED_IP=<Server's public IP>
+MEDIASOUP_MIN_PORT=10000
+MEDIASOUP_MAX_PORT=59999
+
+# WebRTC
+ENABLE_TCP=true
+ENABLE_UDP=true
+PREFER_UDP=true
+```
+
+## Kiểm tra kết nối
+
+### Backend
+```bash
+# Kiểm tra MediaSoup workers
+pm2 logs | grep MediasoupService
+
+# Kiểm tra WebSocket kết nối
+pm2 logs | grep CallGateway
+```
+
+### Frontend
+```javascript
+// Thêm logging chi tiết
+socket.on('connect', () => {
+  console.log('[WEBRTC] Connected to server:', socket.id);
+});
+
+socket.on('disconnect', (reason) => {
+  console.log('[WEBRTC] Disconnected from server:', reason);
+});
+
+socket.on('error', (error) => {
+  console.error('[WEBRTC] Socket error:', error);
+});
+```
+
+## Cấu hình NAT và Firewall
+
+1. Mở các port UDP/TCP range (10000-59999) cho MediaSoup
+2. Đảm bảo WebSocket port (thường là 80/443) được mở
+3. Cấu hình NAT traversal khi cần thiết
+4. Sử dụng STUN/TURN servers khi cần
+
+## Tài liệu tham khảo
+
+- [MediaSoup Documentation](https://mediasoup.org/documentation/)
+- [WebRTC Troubleshooting](https://webrtc.org/getting-started/troubleshooting)
+- [Socket.IO Documentation](https://socket.io/docs/)

@@ -17,12 +17,17 @@ import { JwtService } from '@nestjs/jwt';
 @Injectable()
 @WebSocketGateway({
   cors: {
-    origin: true,
+    origin: '*',
     credentials: true,
   },
   namespace: '/call',
+<<<<<<< HEAD
   pingInterval: 30000,
   pingTimeout: 30000,
+=======
+  pingInterval: 5000,
+  pingTimeout: 10000,
+>>>>>>> 5f94687 (Enhance Dockerfile to improve build and production stages by adding necessary build dependencies, including build-base and python3-dev, and updating npm installation commands for mediasoup. Additionally, refine WebSocket gateway settings for better connection management and logging, and introduce robust error handling in mediasoup service initialization.)
   transports: ['websocket', 'polling'],
   allowUpgrades: true,
   connectTimeout: 60000,
@@ -108,27 +113,62 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleConnection(client: Socket) {
     try {
+      this.logger.log(`New connection: ${client.id} via ${client.conn.transport.name}`);
+      
       const userId = await this.getUserFromSocket(client);
       if (!userId) {
-        this.logger.warn('Client connected without valid authentication');
-        client.disconnect();
+        this.logger.warn(`Client ${client.id} connected without valid authentication`);
         return;
       }
 
       this.addUserSocket(userId, client);
       client.join(`user:${userId}`);
 
+<<<<<<< HEAD
       this.logger.log(`User ${userId} connected to call gateway`);
+=======
+      client.emit('connection:established', { 
+        userId, 
+        socketId: client.id, 
+        status: 'connected',
+        timestamp: new Date().toISOString()
+      });
+
+      this.logger.log(`User ${userId} connected to call gateway with socket ID: ${client.id}`);
+      this.logger.log(`Current transport: ${client.conn.transport.name}`);
+      this.logger.log(`Connection state: ${client.connected ? 'Connected' : 'Disconnected'}`);
+>>>>>>> 5f94687 (Enhance Dockerfile to improve build and production stages by adding necessary build dependencies, including build-base and python3-dev, and updating npm installation commands for mediasoup. Additionally, refine WebSocket gateway settings for better connection management and logging, and introduce robust error handling in mediasoup service initialization.)
     } catch (error) {
       this.logger.error(`Error in handleConnection: ${error.message}`);
-      client.disconnect();
     }
   }
 
   handleDisconnect(client: Socket) {
     try {
+<<<<<<< HEAD
+=======
+      const userId = this.socketToUser.get(client.id);
+      const roomId = this.socketToRoom.get(client.id);
+      
+      this.logger.log(`Client disconnected: ${client.id}, user: ${userId || 'unknown'}`);
+      
+      if (userId && roomId) {
+        client.to(`room:${roomId}`).emit('user:disconnected', { 
+          userId, 
+          reason: 'socket_closed',
+          timestamp: new Date().toISOString()
+        });
+        
+        this.mediasoupService.closeTransport(roomId, userId, 'send');
+        this.mediasoupService.closeTransport(roomId, userId, 'recv');
+        
+        this.socketToRoom.delete(client.id);
+        
+        this.logger.log(`Cleaned up resources for user ${userId} in room ${roomId}`);
+      }
+      
+>>>>>>> 5f94687 (Enhance Dockerfile to improve build and production stages by adding necessary build dependencies, including build-base and python3-dev, and updating npm installation commands for mediasoup. Additionally, refine WebSocket gateway settings for better connection management and logging, and introduce robust error handling in mediasoup service initialization.)
       this.removeUserSocket(client);
-      this.logger.log(`Client disconnected: ${client.id}`);
     } catch (error) {
       this.logger.error(`Error in handleDisconnect: ${error.message}`);
     }
@@ -219,10 +259,20 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const userId = this.socketToUser.get(client.id);
       if (!userId) {
+<<<<<<< HEAD
+=======
+        this.logger.error(`User not authenticated for socket ${client.id}`);
+        
+        setTimeout(() => {
+          client.emit('auth:required', { message: 'Authentication required' });
+        }, 1000);
+        
+>>>>>>> 5f94687 (Enhance Dockerfile to improve build and production stages by adding necessary build dependencies, including build-base and python3-dev, and updating npm installation commands for mediasoup. Additionally, refine WebSocket gateway settings for better connection management and logging, and introduce robust error handling in mediasoup service initialization.)
         return { error: 'User not authenticated' };
       }
 
       const { roomId } = data;
+<<<<<<< HEAD
 
       // Join the room
       client.join(`room:${roomId}`);
@@ -232,6 +282,23 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
         await this.mediasoupService.getRtpCapabilities(roomId);
 
       return { rtpCapabilities };
+=======
+      
+      this.logger.log(`User ${userId} attempting to join room ${roomId}`);
+      
+      await this.mediasoupService.createRouter(roomId);
+      
+      client.join(`room:${roomId}`);
+      this.socketToRoom.set(client.id, roomId);
+      
+      const rtpCapabilities = await this.mediasoupService.getRtpCapabilities(roomId);
+      
+      client.to(`room:${roomId}`).emit('user:joined', { userId, timestamp: new Date().toISOString() });
+      
+      this.logger.log(`User ${userId} joined room ${roomId} successfully with capabilities`);
+      
+      return { rtpCapabilities, success: true };
+>>>>>>> 5f94687 (Enhance Dockerfile to improve build and production stages by adding necessary build dependencies, including build-base and python3-dev, and updating npm installation commands for mediasoup. Additionally, refine WebSocket gateway settings for better connection management and logging, and introduce robust error handling in mediasoup service initialization.)
     } catch (error) {
       this.logger.error(`Error in joinRoom: ${error.message}`);
       return { error: error.message };
