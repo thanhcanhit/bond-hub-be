@@ -31,8 +31,21 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
     numWorkers: os.cpus().length,
     // mediasoup Worker settings
     worker: {
-      logLevel: 'warn',
-      logTags: ['info', 'ice', 'dtls', 'rtp', 'srtp', 'rtcp'],
+      logLevel: 'debug',
+      logTags: [
+        'info',
+        'ice',
+        'dtls',
+        'rtp',
+        'srtp',
+        'rtcp',
+        'rtx',
+        'bwe',
+        'score',
+        'simulcast',
+        'svc',
+        'sctp',
+      ],
       rtcMinPort: 10000,
       rtcMaxPort: 59999,
     },
@@ -229,57 +242,24 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
       dtlsParameters: mediasoup.types.DtlsParameters;
     };
   }> {
-    const router = this.getRouter(roomId);
+    let router = this.getRouter(roomId);
     if (!router) {
-      throw new Error(`Router not found for room ${roomId}`);
+      this.logger.log(`Router not found for room ${roomId}, creating new one`);
+      router = await this.createRouter(roomId);
     }
 
-    const transport = await router.createWebRtcTransport({
-      listenInfos: [
-        {
-          protocol: 'udp',
-          ip: this.config.webRtcTransport.listenIps[0].ip,
-          announcedAddress:
-            this.config.webRtcTransport.listenIps[0].announcedIp,
-        },
-        {
-          protocol: 'tcp',
-          ip: this.config.webRtcTransport.listenIps[0].ip,
-          announcedAddress:
-            this.config.webRtcTransport.listenIps[0].announcedIp,
-        },
-      ],
-      initialAvailableOutgoingBitrate:
-        this.config.webRtcTransport.initialAvailableOutgoingBitrate,
-      enableUdp: true,
-      enableTcp: true,
-      preferUdp: true,
-    });
+    try {
+      this.logger.log(`Creating WebRTC transport for user ${userId} in room ${roomId} (${direction})`);
 
-    const transportId = `${roomId}:${userId}:${direction}`;
-    this.transports.set(transportId, transport);
-
-    transport.on('dtlsstatechange', (dtlsState) => {
-      if (dtlsState === 'closed') {
+      // Kiểm tra xem transport đã tồn tại chưa
+      const transportId = `${roomId}:${userId}:${direction}`;
+      const existingTransport = this.transports.get(transportId);
+      if (existingTransport) {
+        this.logger.log(`Found existing transport ${existingTransport.id}, closing it`);
+        existingTransport.close();
         this.transports.delete(transportId);
       }
-    });
 
-<<<<<<< HEAD
-    transport.observer.on('close', () => {
-      this.transports.delete(transportId);
-    });
-
-    return {
-      transport,
-      params: {
-        id: transport.id,
-        iceParameters: transport.iceParameters,
-        iceCandidates: transport.iceCandidates,
-        dtlsParameters: transport.dtlsParameters,
-      },
-    };
-=======
       // Sử dụng cấu hình mạnh mẽ hơn cho WebRTC transport
       const transport = await router.createWebRtcTransport({
         listenIps: [
@@ -336,12 +316,13 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
       this.logger.error(`Failed to create WebRTC transport: ${error.message}`);
       throw error;
     }
->>>>>>> 5f94687 (Enhance Dockerfile to improve build and production stages by adding necessary build dependencies, including build-base and python3-dev, and updating npm installation commands for mediasoup. Additionally, refine WebSocket gateway settings for better connection management and logging, and introduce robust error handling in mediasoup service initialization.)
   }
 
   /**
    * Connect a WebRTC transport
-   * @param transportId The transport ID
+   * @param roomId The room ID
+   * @param userId The user ID
+   * @param direction 'send' or 'recv'
    * @param dtlsParameters The DTLS parameters
    */
   async connectWebRtcTransport(
@@ -350,15 +331,35 @@ export class MediasoupService implements OnModuleInit, OnModuleDestroy {
     direction: 'send' | 'recv',
     dtlsParameters: mediasoup.types.DtlsParameters,
   ): Promise<void> {
-    const transportId = `${roomId}:${userId}:${direction}`;
-    const transport = this.transports.get(transportId);
+    const maxRetries = 3;
+    let lastError: Error | null = null;
 
-    if (!transport) {
-      throw new Error(`Transport not found with ID ${transportId}`);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const transportId = `${roomId}:${userId}:${direction}`;
+        const transport = this.transports.get(transportId);
+
+        if (!transport) {
+          throw new Error(`Transport not found: ${transportId}`);
+        }
+
+        this.logger.log(`Connecting transport ${transport.id} for user ${userId} (attempt ${attempt}/${maxRetries})`);
+        await transport.connect({ dtlsParameters });
+        this.logger.log(`Transport ${transport.id} connected successfully`);
+        return;
+      } catch (error) {
+        lastError = error as Error;
+        this.logger.error(`Failed to connect transport (attempt ${attempt}/${maxRetries}): ${error.message}`);
+        
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
+      }
     }
 
-    await transport.connect({ dtlsParameters });
-    this.logger.log(`Transport ${transportId} connected`);
+    if (lastError) {
+      throw lastError;
+    }
   }
 
   /**

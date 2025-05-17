@@ -21,13 +21,8 @@ import { JwtService } from '@nestjs/jwt';
     credentials: true,
   },
   namespace: '/call',
-<<<<<<< HEAD
-  pingInterval: 30000,
-  pingTimeout: 30000,
-=======
   pingInterval: 5000,
   pingTimeout: 10000,
->>>>>>> 5f94687 (Enhance Dockerfile to improve build and production stages by adding necessary build dependencies, including build-base and python3-dev, and updating npm installation commands for mediasoup. Additionally, refine WebSocket gateway settings for better connection management and logging, and introduce robust error handling in mediasoup service initialization.)
   transports: ['websocket', 'polling'],
   allowUpgrades: true,
   connectTimeout: 60000,
@@ -40,6 +35,7 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(CallGateway.name);
   private userSockets: Map<string, Set<Socket>> = new Map();
   private socketToUser: Map<string, string> = new Map();
+  private socketToRoom: Map<string, string> = new Map();
 
   constructor(
     private readonly callService: CallService,
@@ -124,9 +120,6 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.addUserSocket(userId, client);
       client.join(`user:${userId}`);
 
-<<<<<<< HEAD
-      this.logger.log(`User ${userId} connected to call gateway`);
-=======
       client.emit('connection:established', { 
         userId, 
         socketId: client.id, 
@@ -137,7 +130,6 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.log(`User ${userId} connected to call gateway with socket ID: ${client.id}`);
       this.logger.log(`Current transport: ${client.conn.transport.name}`);
       this.logger.log(`Connection state: ${client.connected ? 'Connected' : 'Disconnected'}`);
->>>>>>> 5f94687 (Enhance Dockerfile to improve build and production stages by adding necessary build dependencies, including build-base and python3-dev, and updating npm installation commands for mediasoup. Additionally, refine WebSocket gateway settings for better connection management and logging, and introduce robust error handling in mediasoup service initialization.)
     } catch (error) {
       this.logger.error(`Error in handleConnection: ${error.message}`);
     }
@@ -145,8 +137,6 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleDisconnect(client: Socket) {
     try {
-<<<<<<< HEAD
-=======
       const userId = this.socketToUser.get(client.id);
       const roomId = this.socketToRoom.get(client.id);
       
@@ -167,7 +157,6 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.logger.log(`Cleaned up resources for user ${userId} in room ${roomId}`);
       }
       
->>>>>>> 5f94687 (Enhance Dockerfile to improve build and production stages by adding necessary build dependencies, including build-base and python3-dev, and updating npm installation commands for mediasoup. Additionally, refine WebSocket gateway settings for better connection management and logging, and introduce robust error handling in mediasoup service initialization.)
       this.removeUserSocket(client);
     } catch (error) {
       this.logger.error(`Error in handleDisconnect: ${error.message}`);
@@ -259,30 +248,16 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const userId = this.socketToUser.get(client.id);
       if (!userId) {
-<<<<<<< HEAD
-=======
         this.logger.error(`User not authenticated for socket ${client.id}`);
         
         setTimeout(() => {
           client.emit('auth:required', { message: 'Authentication required' });
         }, 1000);
         
->>>>>>> 5f94687 (Enhance Dockerfile to improve build and production stages by adding necessary build dependencies, including build-base and python3-dev, and updating npm installation commands for mediasoup. Additionally, refine WebSocket gateway settings for better connection management and logging, and introduce robust error handling in mediasoup service initialization.)
         return { error: 'User not authenticated' };
       }
 
       const { roomId } = data;
-<<<<<<< HEAD
-
-      // Join the room
-      client.join(`room:${roomId}`);
-
-      // Get router RTP capabilities
-      const rtpCapabilities =
-        await this.mediasoupService.getRtpCapabilities(roomId);
-
-      return { rtpCapabilities };
-=======
       
       this.logger.log(`User ${userId} attempting to join room ${roomId}`);
       
@@ -298,9 +273,8 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.log(`User ${userId} joined room ${roomId} successfully with capabilities`);
       
       return { rtpCapabilities, success: true };
->>>>>>> 5f94687 (Enhance Dockerfile to improve build and production stages by adding necessary build dependencies, including build-base and python3-dev, and updating npm installation commands for mediasoup. Additionally, refine WebSocket gateway settings for better connection management and logging, and introduce robust error handling in mediasoup service initialization.)
     } catch (error) {
-      this.logger.error(`Error in joinRoom: ${error.message}`);
+      this.logger.error(`Error in joinRoom for user ${this.socketToUser.get(client.id)}: ${error.message}`);
       return { error: error.message };
     }
   }
@@ -313,21 +287,36 @@ export class CallGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const userId = this.socketToUser.get(client.id);
       if (!userId) {
+        this.logger.error(`User not authenticated for socket ${client.id}`);
         return { error: 'User not authenticated' };
       }
 
       const { roomId, direction } = data;
 
-      // Create WebRTC transport
-      const { params } = await this.mediasoupService.createWebRtcTransport(
+      // Kiểm tra xem user có trong room không
+      if (!client.rooms.has(`room:${roomId}`)) {
+        this.logger.error(`User ${userId} not in room ${roomId}`);
+        return { error: 'Not in room' };
+      }
+      
+      this.logger.log(`Creating ${direction} transport for user ${userId} in room ${roomId}`);
+      
+      const transportData = await this.mediasoupService.createWebRtcTransport(
         roomId,
         userId,
         direction,
       );
-
-      return { params };
+      
+      this.logger.log(`Transport created successfully: ${transportData.transport.id}`);
+      
+      return { 
+        id: transportData.params.id,
+        iceParameters: transportData.params.iceParameters,
+        iceCandidates: transportData.params.iceCandidates,
+        dtlsParameters: transportData.params.dtlsParameters,
+      };
     } catch (error) {
-      this.logger.error(`Error in createWebRtcTransport: ${error.message}`);
+      this.logger.error(`Error creating WebRTC transport for user ${this.socketToUser.get(client.id)}: ${error.message}`);
       return { error: error.message };
     }
   }
