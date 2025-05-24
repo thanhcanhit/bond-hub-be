@@ -745,7 +745,7 @@ export class GroupService {
           // Step 1: Demote current leader to co-leader
           await this.prisma.groupMember.update({
             where: { id: leader.id },
-            data: { role: GroupRole.CO_LEADER },
+            data: { role: GroupRole.MEMBER },
           });
           // Step 2: Allow target to become new leader
           finalRole = GroupRole.LEADER;
