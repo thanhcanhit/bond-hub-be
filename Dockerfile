@@ -3,31 +3,9 @@ FROM node:20-alpine AS build-stage
 
 WORKDIR /app
 
-# Install Python and other build dependencies with virtual environment setup
-RUN apk add --no-cache \
-    python3 \
-    py3-pip \
-    make \
-    g++ \
-    linux-headers \
-    build-base \
-    python3-dev \
-    libc6-compat \
-    git \
-    && python3 -m venv /opt/venv \
-    && . /opt/venv/bin/activate \
-    && pip install --upgrade pip \
-    && pip install invoke
-
-# Set environment variables to use the virtual environment
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Copy package files and install dependencies without mediasoup
+# Copy package files and install ALL dependencies (including dev dependencies)
 COPY package*.json ./
-RUN npm install --omit=dev --ignore-scripts && \
-    npm install --no-save typescript ts-node && \
-    npm rebuild bcrypt --build-from-source && \
-    npm install mediasoup@3.15.7 --build-from-source --verbose
+RUN npm install
 
 # Copy Prisma schema and generate client
 COPY prisma ./prisma/
@@ -41,35 +19,15 @@ RUN npm run build && ls -la dist
 FROM node:20-alpine AS production
 
 # Install PostgreSQL client, cron, and build dependencies
-RUN apk add --no-cache \
-    postgresql-client \
-    python3 \
-    py3-pip \
-    make \
-    g++ \
-    linux-headers \
-    cronie \
-    build-base \
-    python3-dev \
-    libc6-compat \
-    git \
-    && python3 -m venv /opt/venv \
-    && . /opt/venv/bin/activate \
-    && pip install --upgrade pip \
-    && pip install invoke
-
-# Set environment variables to use the virtual environment
-ENV PATH="/opt/venv/bin:$PATH"
+RUN apk add --no-cache postgresql-client python3 make g++ cronie
 
 WORKDIR /app
 
-# Copy package files and install production dependencies
+# Copy package files and install ONLY production dependencies
 COPY package*.json ./
-RUN npm install -g husky && \
-    npm install --omit=dev && \
+RUN npm install --omit=dev --ignore-scripts && \
     npm install -g ts-node typescript && \
-    npm rebuild bcrypt --build-from-source && \
-    npm install mediasoup@3.15.7 --build-from-source --verbose
+    npm rebuild bcrypt --build-from-source
 
 # Copy Prisma files
 COPY prisma ./prisma/
@@ -78,7 +36,6 @@ RUN npx prisma generate
 # Copy built application from builder
 COPY --from=build-stage /app/dist ./dist
 COPY --from=build-stage /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build-stage /app/node_modules/mediasoup ./node_modules/mediasoup
 
 # Copy necessary TypeScript type definitions
 COPY --from=build-stage /app/node_modules/@types ./node_modules/@types

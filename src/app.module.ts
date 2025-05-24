@@ -13,7 +13,6 @@ import { FriendModule } from './friend/friend.module';
 import { ContactModule } from './contact/contact.module';
 import { EventModule } from './event/event.module';
 import { AiModule } from './ai/ai.module';
-import { CallModule } from './call/call.module';
 
 @Module({
   imports: [
@@ -31,7 +30,6 @@ import { CallModule } from './call/call.module';
     FriendModule,
     ContactModule,
     AiModule,
-    CallModule,
   ],
   controllers: [AppController],
   providers: [AppService],
