@@ -1,0 +1,39 @@
+@startuml Mời thành viên vào nhóm - Activity Diagram
+title Mời thành viên vào nhóm - Activity Diagram
+
+|User|
+start
+:Chọn nhóm;
+:Chọn chức năng thêm thành viên;
+:Tìm kiếm người dùng;
+:Chọn người dùng để thêm vào nhóm;
+:Gửi yêu cầu thêm thành viên;
+
+|System|
+:Kiểm tra quyền của người dùng;
+
+if (Có quyền thêm thành viên?) then (Có)
+  :Kiểm tra người dùng đã là thành viên chưa;
+  
+  if (Đã là thành viên?) then (Có)
+    :Trả về lỗi "Người dùng đã là thành viên của nhóm";
+  else (Không)
+    :Thêm người dùng vào nhóm với vai trò MEMBER;
+    :Lưu thông tin vào cơ sở dữ liệu;
+    :Gửi thông báo cho người dùng được thêm qua WebSocket;
+    :Trả về thông tin thành viên mới;
+  endif
+else (Không)
+  :Trả về lỗi "Không có quyền thêm thành viên";
+endif
+
+|User|
+if (Thêm thành viên thành công?) then (Có)
+  :Xem thông báo thêm thành viên thành công;
+  :Xem danh sách thành viên đã cập nhật;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

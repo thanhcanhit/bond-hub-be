@@ -1,0 +1,81 @@
+@startuml Tìm kiếm người dùng - Sequence Diagram
+title Tìm kiếm người dùng - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "UserController" as UserController
+entity "UserService" as UserService
+entity "PrismaService" as Prisma
+database "Database" as DB
+
+== Tìm kiếm bằng Email/Số điện thoại ==
+
+User -> Frontend: Nhập email hoặc số điện thoại
+Frontend -> UserController: POST /users/search\n{email/phoneNumber}
+UserController -> UserService: searchUserByEmailOrPhone(email, phoneNumber, currentUserId)
+
+UserService -> Prisma: user.findFirst()
+Prisma -> DB: SELECT * FROM users\nWHERE email = ? OR phoneNumber = ?
+DB --> Prisma: Thông tin người dùng
+Prisma --> UserService: User object
+
+alt Không tìm thấy người dùng hoặc người dùng không cho phép tìm kiếm
+    UserService --> UserController: throw NotFoundException
+    UserController --> Frontend: 404 Not Found
+    Frontend --> User: Hiển thị lỗi "Không tìm thấy người dùng"
+else Tìm thấy người dùng
+    UserService -> Prisma: friend.findFirst()
+    Prisma -> DB: SELECT * FROM friends\nWHERE (senderId = ? AND receiverId = ?)\nOR (senderId = ? AND receiverId = ?)
+    DB --> Prisma: Thông tin mối quan hệ
+    Prisma --> UserService: Relationship object
+
+    UserService -> UserService: Xử lý thông tin người dùng và mối quan hệ
+    UserService --> UserController: Thông tin người dùng và mối quan hệ
+    UserController --> Frontend: 200 OK {user, relationship}
+    Frontend --> User: Hiển thị thông tin người dùng
+end
+
+== Tìm kiếm bằng QR Code/ID ==
+
+User -> Frontend: Quét mã QR chứa ID người dùng
+Frontend -> Frontend: Trích xuất ID người dùng từ mã QR
+Frontend -> UserController: GET /users/:id
+UserController -> UserService: getUserById(id, currentUserId)
+
+UserService -> Prisma: user.findUnique()
+Prisma -> DB: SELECT * FROM users\nWHERE id = ?
+DB --> Prisma: Thông tin người dùng
+Prisma --> UserService: User object
+
+alt Không tìm thấy người dùng
+    UserService --> UserController: return null
+    UserController --> Frontend: 404 Not Found
+    Frontend --> User: Hiển thị lỗi "Không tìm thấy người dùng"
+else Tìm thấy người dùng
+    UserService -> Prisma: friend.findFirst()
+    Prisma -> DB: SELECT * FROM friends\nWHERE (senderId = ? AND receiverId = ?)\nOR (senderId = ? AND receiverId = ?)
+    DB --> Prisma: Thông tin mối quan hệ
+    Prisma --> UserService: Relationship object
+
+    UserService -> UserService: Xử lý thông tin người dùng và mối quan hệ
+    UserService --> UserController: Thông tin người dùng và mối quan hệ
+    UserController --> Frontend: 200 OK {user, relationship}
+    Frontend --> User: Hiển thị thông tin người dùng
+end
+
+@enduml

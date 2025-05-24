@@ -1,0 +1,51 @@
+@startuml Phân quyền trong nhóm - Activity Diagram
+title Phân quyền trong nhóm - Activity Diagram
+
+|User|
+start
+:Chọn nhóm;
+:Xem danh sách thành viên;
+:Chọn thành viên cần phân quyền;
+:Chọn vai trò mới (LEADER, CO_LEADER, MEMBER);
+:Gửi yêu cầu cập nhật vai trò;
+
+|System|
+:Kiểm tra quyền của người dùng;
+
+if (Có quyền phân quyền?) then (Có)
+  :Kiểm tra thành viên cần phân quyền;
+  
+  if (Thành viên tồn tại?) then (Có)
+    if (Vai trò mới là CO_LEADER và người phân quyền không phải trưởng nhóm?) then (Có)
+      :Trả về lỗi "Chỉ trưởng nhóm mới có thể phân quyền phó nhóm";
+    elseif (Vai trò mới là LEADER?) then (Có)
+      if (Người phân quyền là trưởng nhóm hiện tại?) then (Có)
+        :Chuyển trưởng nhóm hiện tại thành phó nhóm;
+        :Cập nhật vai trò của thành viên thành trưởng nhóm;
+        :Gửi thông báo cho các thành viên qua WebSocket;
+        :Trả về thông tin thành viên đã cập nhật;
+      else (Không)
+        :Trả về lỗi "Chỉ trưởng nhóm mới có thể chuyển giao quyền trưởng nhóm";
+      endif
+    else (Vai trò khác)
+      :Cập nhật vai trò của thành viên;
+      :Gửi thông báo cho các thành viên qua WebSocket;
+      :Trả về thông tin thành viên đã cập nhật;
+    endif
+  else (Không)
+    :Trả về lỗi "Thành viên không tồn tại trong nhóm";
+  endif
+else (Không)
+  :Trả về lỗi "Không có quyền phân quyền";
+endif
+
+|User|
+if (Phân quyền thành công?) then (Có)
+  :Xem thông báo phân quyền thành công;
+  :Xem danh sách thành viên đã cập nhật;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

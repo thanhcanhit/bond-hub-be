@@ -1,0 +1,97 @@
+@startuml Phân quyền trong nhóm - Sequence Diagram
+title Phân quyền trong nhóm - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "GroupController" as Controller
+entity "GroupService" as Service
+entity "PrismaService" as Prisma
+entity "GroupGateway" as Gateway
+entity "EventService" as Event
+database "Database" as DB
+queue "WebSocket" as WS
+
+User -> Frontend: Chọn thành viên và vai trò mới
+Frontend -> Controller: PATCH /groups/:groupId/members/:userId/role\n{role}
+
+Controller -> Service: updateMemberRole(groupId, userId, role, requestUserId)
+
+Service -> Service: validateGroupAccess(groupId, requestUserId, 'update member role')
+
+Service -> Prisma: group.findUnique()
+Prisma -> DB: SELECT * FROM groups\nWHERE id = ?
+DB --> Prisma: Group data with members
+Prisma --> Service: Group object with members
+
+Service -> Service: Kiểm tra người dùng có quyền phân quyền
+
+alt Không có quyền phân quyền
+    Service --> Controller: throw ForbiddenException
+    Controller --> Frontend: 403 Forbidden
+    Frontend --> User: Hiển thị lỗi "Không có quyền phân quyền"
+else Có quyền phân quyền
+    Service -> Service: Tìm thành viên cần phân quyền
+    
+    alt Thành viên không tồn tại
+        Service --> Controller: throw NotFoundException
+        Controller --> Frontend: 404 Not Found
+        Frontend --> User: Hiển thị lỗi "Thành viên không tồn tại trong nhóm"
+    else Thành viên tồn tại
+        alt Vai trò mới là CO_LEADER và người phân quyền không phải trưởng nhóm
+            Service --> Controller: throw ForbiddenException
+            Controller --> Frontend: 403 Forbidden
+            Frontend --> User: Hiển thị lỗi "Chỉ trưởng nhóm mới có thể phân quyền phó nhóm"
+        else Vai trò mới là LEADER
+            alt Người phân quyền là trưởng nhóm hiện tại
+                Service -> Prisma: groupMember.update() (trưởng nhóm cũ)
+                Prisma -> DB: UPDATE group_members\nSET role = 'CO_LEADER'\nWHERE id = ?
+                DB --> Prisma: Updated member data
+                Prisma --> Service: Updated member object
+                
+                Service -> Prisma: groupMember.update() (trưởng nhóm mới)
+                Prisma -> DB: UPDATE group_members\nSET role = 'LEADER'\nWHERE id = ?
+                DB --> Prisma: Updated member data
+                Prisma --> Service: Updated member object
+            else Người phân quyền không phải trưởng nhóm
+                Service -> Service: Chuyển vai trò thành CO_LEADER thay vì LEADER
+                
+                Service -> Prisma: groupMember.update()
+                Prisma -> DB: UPDATE group_members\nSET role = 'CO_LEADER'\nWHERE id = ?
+                DB --> Prisma: Updated member data
+                Prisma --> Service: Updated member object
+            end
+        else Vai trò khác
+            Service -> Prisma: groupMember.update()
+            Prisma -> DB: UPDATE group_members\nSET role = ?\nWHERE id = ?
+            DB --> Prisma: Updated member data
+            Prisma --> Service: Updated member object
+        end
+        
+        Service -> Gateway: notifyRoleChanged()
+        Gateway -> WS: emit('role_changed', data)
+        
+        Service -> Event: emitGroupRoleChanged()
+        Event -> WS: emit('group_role_changed', data)
+        
+        Service --> Controller: Updated member object
+        Controller --> Frontend: 200 OK {member}
+        Frontend --> User: Hiển thị thông báo phân quyền thành công
+    end
+end
+
+@enduml

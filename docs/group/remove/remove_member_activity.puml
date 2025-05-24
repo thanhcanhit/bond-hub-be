@@ -1,0 +1,44 @@
+@startuml Xóa thành viên khỏi nhóm - Activity Diagram
+title Xóa thành viên khỏi nhóm - Activity Diagram
+
+|User|
+start
+:Chọn nhóm;
+:Xem danh sách thành viên;
+:Chọn thành viên cần xóa;
+:Chọn chức năng xóa thành viên;
+:Gửi yêu cầu xóa thành viên;
+
+|System|
+:Kiểm tra quyền của người dùng;
+
+if (Có quyền xóa thành viên?) then (Có)
+  :Kiểm tra thành viên cần xóa;
+  
+  if (Thành viên tồn tại?) then (Có)
+    if (Thành viên là trưởng nhóm?) then (Có)
+      :Trả về lỗi "Không thể xóa trưởng nhóm";
+    elseif (Thành viên là phó nhóm và người xóa không phải trưởng nhóm?) then (Có)
+      :Trả về lỗi "Chỉ trưởng nhóm mới có thể xóa phó nhóm";
+    else (Không)
+      :Xóa thành viên khỏi nhóm;
+      :Gửi thông báo cho các thành viên qua WebSocket;
+      :Trả về thông báo xóa thành viên thành công;
+    endif
+  else (Không)
+    :Trả về lỗi "Thành viên không tồn tại trong nhóm";
+  endif
+else (Không)
+  :Trả về lỗi "Không có quyền xóa thành viên";
+endif
+
+|User|
+if (Xóa thành viên thành công?) then (Có)
+  :Xem thông báo xóa thành viên thành công;
+  :Xem danh sách thành viên đã cập nhật;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

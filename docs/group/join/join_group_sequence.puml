@@ -1,0 +1,95 @@
+@startuml Tham gia nhóm bằng QR code - Sequence Diagram
+title Tham gia nhóm bằng QR code - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "GroupController" as Controller
+entity "GroupService" as Service
+entity "PrismaService" as Prisma
+entity "GroupGateway" as Gateway
+entity "EventService" as Event
+database "Database" as DB
+queue "WebSocket" as WS
+
+User -> Frontend: Quét mã QR chứa ID nhóm
+Frontend -> Frontend: Trích xuất ID nhóm từ mã QR (dạng group-groupId)
+Frontend -> Controller: GET /groups/:id/info
+Controller -> Service: getPublicGroupInfo(id)
+
+Service -> Prisma: group.findUnique()
+Prisma -> DB: SELECT * FROM groups\nWHERE id = ?
+DB --> Prisma: Group data
+Prisma --> Service: Group object
+
+Service -> Prisma: groupMember.count()
+Prisma -> DB: SELECT COUNT(*) FROM group_members\nWHERE groupId = ?
+DB --> Prisma: Count result
+Prisma --> Service: Member count
+
+Service --> Controller: GroupInfoDto
+Controller --> Frontend: 200 OK {group info}
+Frontend --> User: Hiển thị thông tin nhóm
+
+User -> Frontend: Chọn tham gia nhóm
+Frontend -> Controller: POST /groups/join\n{groupId}
+
+Controller -> Service: joinGroup(groupId, userId)
+
+Service -> Prisma: group.findUnique()
+Prisma -> DB: SELECT * FROM groups\nWHERE id = ?
+DB --> Prisma: Group data
+Prisma --> Service: Group object
+
+alt Nhóm không tồn tại
+    Service --> Controller: throw NotFoundException
+    Controller --> Frontend: 404 Not Found
+    Frontend --> User: Hiển thị lỗi "Nhóm không tồn tại"
+else Nhóm tồn tại
+    Service -> Prisma: groupMember.findFirst()
+    Prisma -> DB: SELECT * FROM group_members\nWHERE groupId = ? AND userId = ?
+    DB --> Prisma: GroupMember data
+    Prisma --> Service: GroupMember object
+
+    alt Người dùng đã là thành viên
+        Service --> Controller: throw BadRequestException
+        Controller --> Frontend: 400 Bad Request
+        Frontend --> User: Hiển thị lỗi "Bạn đã là thành viên của nhóm này"
+    else Người dùng chưa là thành viên
+        Service -> Prisma: groupMember.create()
+        Prisma -> DB: INSERT INTO group_members\n(groupId, userId, role=MEMBER, addedById=userId)
+        DB --> Prisma: GroupMember data
+        Prisma --> Service: GroupMember object
+
+        Service -> Prisma: user.findUnique()
+        Prisma -> DB: SELECT * FROM users\nWHERE id = ?
+        DB --> Prisma: User data
+        Prisma --> Service: User object
+
+        Service -> Gateway: notifyMemberAdded()
+        Gateway -> WS: emit('member_added', data)
+
+        Service -> Event: emitGroupMemberAdded()
+        Event -> WS: emit('group_member_added', data)
+
+        Service --> Controller: Formatted member object
+        Controller --> Frontend: 200 OK {member}
+        Frontend --> User: Hiển thị thông báo tham gia nhóm thành công
+    end
+end
+
+@enduml

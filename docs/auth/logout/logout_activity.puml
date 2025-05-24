@@ -1,0 +1,35 @@
+@startuml Đăng xuất - Activity Diagram
+title Đăng xuất - Activity Diagram
+
+|User|
+start
+:Chọn đăng xuất;
+:Gửi yêu cầu đăng xuất kèm refresh token;
+
+|System|
+:Kiểm tra refresh token;
+
+if (Refresh token hợp lệ?) then (Có)
+  :Tìm kiếm phiên đăng nhập;
+  
+  if (Phiên đăng nhập tồn tại?) then (Có)
+    :Đánh dấu refresh token đã bị thu hồi;
+    :Thông báo cho thiết bị về việc đăng xuất (qua WebSocket);
+    :Trả về thông báo đăng xuất thành công;
+  else (Không)
+    :Trả về lỗi "Phiên đăng nhập không tồn tại";
+  endif
+else (Không)
+  :Trả về lỗi "Refresh token không hợp lệ";
+endif
+
+|User|
+if (Đăng xuất thành công?) then (Có)
+  :Xóa tokens khỏi thiết bị;
+  :Chuyển đến màn hình đăng nhập;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

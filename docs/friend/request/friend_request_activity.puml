@@ -1,0 +1,49 @@
+@startuml Gửi lời mời kết bạn - Activity Diagram
+title Gửi lời mời kết bạn - Activity Diagram
+
+|User|
+start
+:Tìm kiếm người dùng;
+:Xem thông tin người dùng;
+:Chọn gửi lời mời kết bạn;
+:Nhập lời giới thiệu (tùy chọn);
+:Gửi yêu cầu kết bạn;
+
+|System|
+:Lấy ID người dùng từ token xác thực;
+:Kiểm tra định dạng ID người gửi và người nhận;
+
+if (ID hợp lệ?) then (Có)
+  :Kiểm tra người gửi và người nhận có tồn tại không;
+  
+  if (Người dùng tồn tại?) then (Có)
+    :Kiểm tra mối quan hệ hiện tại;
+    
+    if (Đã là bạn bè?) then (Có)
+      :Trả về lỗi "Đã là bạn bè";
+    elseif (Đã gửi lời mời?) then (Có)
+      :Trả về lỗi "Đã gửi lời mời kết bạn";
+    elseif (Đã bị chặn?) then (Có)
+      :Trả về lỗi "Không thể gửi lời mời kết bạn";
+    else (Không có mối quan hệ)
+      :Tạo lời mời kết bạn mới;
+      :Lưu vào cơ sở dữ liệu;
+      :Gửi thông báo qua WebSocket;
+      :Trả về thông tin lời mời kết bạn;
+    endif
+  else (Không)
+    :Trả về lỗi "Người dùng không tồn tại";
+  endif
+else (Không)
+  :Trả về lỗi "ID không hợp lệ";
+endif
+
+|User|
+if (Gửi lời mời thành công?) then (Có)
+  :Xem thông báo gửi lời mời thành công;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

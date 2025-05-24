@@ -1,0 +1,33 @@
+@startuml Giải tán nhóm - Activity Diagram
+title Giải tán nhóm - Activity Diagram
+
+|User|
+start
+:Chọn nhóm;
+:Chọn chức năng giải tán nhóm;
+:Xác nhận giải tán nhóm;
+:Gửi yêu cầu giải tán nhóm;
+
+|System|
+:Kiểm tra quyền của người dùng;
+
+if (Là trưởng nhóm?) then (Có)
+  :Lấy danh sách tất cả thành viên;
+  :Xóa tất cả thành viên khỏi nhóm;
+  :Xóa nhóm khỏi cơ sở dữ liệu;
+  :Gửi thông báo cho tất cả thành viên qua WebSocket;
+  :Trả về thông báo giải tán thành công;
+else (Không)
+  :Trả về lỗi "Chỉ trưởng nhóm mới có thể giải tán nhóm";
+endif
+
+|User|
+if (Giải tán nhóm thành công?) then (Có)
+  :Xem thông báo giải tán nhóm thành công;
+  :Chuyển đến danh sách nhóm;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

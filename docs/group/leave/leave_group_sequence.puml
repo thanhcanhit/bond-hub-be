@@ -1,0 +1,76 @@
+@startuml Rời nhóm - Sequence Diagram
+title Rời nhóm - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "GroupController" as Controller
+entity "GroupService" as Service
+entity "PrismaService" as Prisma
+entity "GroupGateway" as Gateway
+entity "EventService" as Event
+database "Database" as DB
+queue "WebSocket" as WS
+
+User -> Frontend: Chọn rời nhóm
+Frontend -> Controller: POST /groups/:groupId/leave
+
+Controller -> Service: leaveGroup(groupId, userId)
+
+Service -> Prisma: group.findUnique()
+Prisma -> DB: SELECT * FROM groups\nWHERE id = ?
+DB --> Prisma: Group data with members
+Prisma --> Service: Group object with members
+
+alt Nhóm không tồn tại
+    Service --> Controller: throw NotFoundException
+    Controller --> Frontend: 404 Not Found
+    Frontend --> User: Hiển thị lỗi "Nhóm không tồn tại"
+else Nhóm tồn tại
+    Service -> Service: Tìm thành viên trong nhóm
+    
+    alt Không phải thành viên
+        Service --> Controller: throw NotFoundException
+        Controller --> Frontend: 404 Not Found
+        Frontend --> User: Hiển thị lỗi "Bạn không phải thành viên của nhóm này"
+    else Là thành viên
+        Service -> Service: Kiểm tra vai trò
+        
+        alt Là trưởng nhóm
+            Service --> Controller: throw ForbiddenException
+            Controller --> Frontend: 403 Forbidden
+            Frontend --> User: Hiển thị lỗi "Trưởng nhóm không thể rời nhóm. Hãy chuyển quyền trưởng nhóm trước."
+        else Không phải trưởng nhóm
+            Service -> Prisma: groupMember.delete()
+            Prisma -> DB: DELETE FROM group_members\nWHERE id = ?
+            DB --> Prisma: Delete result
+            Prisma --> Service: Delete result
+            
+            Service -> Gateway: notifyMemberRemoved()
+            Gateway -> WS: emit('member_removed', data)
+            
+            Service -> Event: emitGroupMemberRemoved()
+            Event -> WS: emit('group_member_removed', data)
+            
+            Service --> Controller: void
+            Controller --> Frontend: 204 No Content
+            Frontend --> User: Hiển thị thông báo rời nhóm thành công
+        end
+    end
+end
+
+@enduml

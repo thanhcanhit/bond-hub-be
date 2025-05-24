@@ -1,0 +1,67 @@
+@startuml Đăng nhập - Sequence Diagram
+title Đăng nhập - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "AuthController" as Controller
+entity "AuthService" as Service
+entity "PrismaService" as Prisma
+entity "JwtService" as JWT
+database "Database" as DB
+
+User -> Frontend: Nhập thông tin đăng nhập
+User -> Frontend: Chọn loại thiết bị (DeviceType)
+Frontend -> Controller: POST /auth/login\n(email/phoneNumber, password, deviceType)
+
+Controller -> Service: login(identifier, password, deviceInfo)
+
+Service -> Prisma: findFirst(email/phoneNumber)
+Prisma -> DB: SELECT * FROM users\nWHERE email = ? OR phoneNumber = ?
+DB --> Prisma: User data
+Prisma --> Service: User object
+
+alt User not found
+    Service --> Controller: throw UnauthorizedException
+    Controller --> Frontend: 401 Unauthorized
+    Frontend --> User: Hiển thị lỗi "Thông tin đăng nhập không hợp lệ"
+else User found
+    Service -> Service: bcrypt.compare(password, user.passwordHash)
+
+    alt Password invalid
+        Service --> Controller: throw UnauthorizedException
+        Controller --> Frontend: 401 Unauthorized
+        Frontend --> User: Hiển thị lỗi "Thông tin đăng nhập không hợp lệ"
+    else Password valid
+        Service -> JWT: sign({sub: userId, deviceType})
+        JWT --> Service: accessToken
+
+        Service -> Service: Generate refreshToken (UUID)
+
+        Service -> Prisma: refreshToken.create()
+        Prisma -> DB: INSERT INTO refresh_tokens
+        DB --> Prisma: Refresh token record
+        Prisma --> Service: Refresh token data
+
+        Service --> Controller: {accessToken, refreshToken, user}
+        Controller --> Frontend: 200 OK {accessToken, refreshToken, user}
+        Frontend -> Frontend: Lưu tokens
+        Frontend --> User: Chuyển đến màn hình chính
+    end
+end
+
+@enduml

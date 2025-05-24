@@ -1,0 +1,48 @@
+@startuml Tạo nhóm - Activity Diagram
+title Tạo nhóm - Activity Diagram
+
+|User|
+start
+:Chọn tạo nhóm mới;
+:Nhập tên nhóm;
+:Chọn ảnh đại diện nhóm (tùy chọn);
+:Chọn các thành viên ban đầu;
+:Gửi yêu cầu tạo nhóm;
+
+|System|
+:Kiểm tra thông tin nhóm;
+
+if (Thông tin hợp lệ?) then (Có)
+  if (Có ảnh đại diện?) then (Có)
+    :Kiểm tra định dạng ảnh;
+    
+    if (Định dạng hợp lệ?) then (Có)
+      :Tải ảnh lên hệ thống lưu trữ;
+    else (Không)
+      :Trả về lỗi "Định dạng ảnh không hợp lệ";
+      stop
+    endif
+  endif
+  
+  :Tạo nhóm mới trong cơ sở dữ liệu;
+  :Thêm người tạo làm thành viên với vai trò LEADER;
+  
+  if (Có thành viên ban đầu?) then (Có)
+    :Thêm các thành viên ban đầu với vai trò MEMBER;
+    :Gửi thông báo cho các thành viên qua WebSocket;
+  endif
+  
+  :Trả về thông tin nhóm đã tạo;
+else (Không)
+  :Trả về lỗi "Thông tin nhóm không hợp lệ";
+endif
+
+|User|
+if (Tạo nhóm thành công?) then (Có)
+  :Xem thông tin nhóm đã tạo;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

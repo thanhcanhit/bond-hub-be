@@ -1,0 +1,75 @@
+@startuml Tạo nhóm - Sequence Diagram
+title Tạo nhóm - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "GroupController" as Controller
+entity "GroupService" as Service
+entity "StorageService" as Storage
+entity "PrismaService" as Prisma
+entity "GroupGateway" as Gateway
+entity "EventService" as Event
+database "Database" as DB
+queue "WebSocket" as WS
+
+User -> Frontend: Nhập thông tin nhóm và chọn thành viên
+Frontend -> Controller: POST /groups\n{name, creatorId, initialMembers, file}
+
+Controller -> Service: create(createGroupDto, file)
+
+alt Có file ảnh đại diện
+    Service -> Service: Kiểm tra định dạng ảnh
+    
+    alt Định dạng không hợp lệ
+        Service --> Controller: throw BadRequestException
+        Controller --> Frontend: 400 Bad Request
+        Frontend --> User: Hiển thị lỗi "Định dạng ảnh không hợp lệ"
+    else Định dạng hợp lệ
+        Service -> Storage: uploadFiles(file, GROUP_AVATARS_BUCKET)
+        Storage --> Service: fileData với URL
+    end
+end
+
+Service -> Prisma: group.create()
+Prisma -> DB: INSERT INTO groups\n(name, creatorId, avatarUrl)
+DB --> Prisma: Group data
+Prisma --> Service: Group object
+
+Service -> Prisma: groupMember.create() (cho người tạo)
+Prisma -> DB: INSERT INTO group_members\n(groupId, userId, role=LEADER)
+DB --> Prisma: GroupMember data
+Prisma --> Service: GroupMember object
+
+loop Cho mỗi thành viên ban đầu
+    Service -> Prisma: groupMember.create()
+    Prisma -> DB: INSERT INTO group_members\n(groupId, userId, role=MEMBER)
+    DB --> Prisma: GroupMember data
+    Prisma --> Service: GroupMember object
+    
+    Service -> Gateway: notifyMemberAdded()
+    Gateway -> WS: emit('member_added', data)
+    
+    Service -> Event: emitGroupMemberAdded()
+    Event -> WS: emit('group_member_added', data)
+end
+
+Service --> Controller: Group object với danh sách thành viên
+Controller --> Frontend: 201 Created {group}
+Frontend --> User: Hiển thị thông tin nhóm đã tạo
+
+@enduml

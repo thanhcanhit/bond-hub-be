@@ -1,0 +1,116 @@
+@startuml Đăng ký - Sequence Diagram
+title Đăng ký - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "AuthController" as Controller
+entity "AuthService" as Service
+entity "PrismaService" as Prisma
+entity "CacheService" as Cache
+entity "MailService" as Mail
+entity "SmsService" as SMS
+database "Database" as DB
+
+== Bước 1: Khởi tạo đăng ký ==
+
+User -> Frontend: Nhập email/số điện thoại
+Frontend -> Controller: POST /auth/register/initiate\n(email/phoneNumber)
+Controller -> Service: initiateRegistration(initiateDto)
+
+Service -> Prisma: findFirst(email/phoneNumber)
+Prisma -> DB: SELECT * FROM users\nWHERE email = ? OR phoneNumber = ?
+DB --> Prisma: Kết quả
+Prisma --> Service: existingUser
+
+alt User exists
+    Service --> Controller: throw BadRequestException
+    Controller --> Frontend: 400 Bad Request
+    Frontend --> User: Hiển thị lỗi "Email/Số điện thoại đã được đăng ký"
+else User does not exist
+    Service -> Service: generateOtp()
+    Service -> Service: Generate registrationId (UUID)
+
+    Service -> Cache: set(`registration:${registrationId}`, data, 300)
+    Service -> Cache: set(`otp:${registrationId}`, otp, 300)
+
+    alt Has email
+        Service -> Mail: sendOtpEmail(email, otp)
+        Mail --> Service: emailSent
+    end
+
+    alt Has phone
+        Service -> SMS: sendOtp(phoneNumber, otp)
+        SMS --> Service: smsSent
+    end
+
+    Service --> Controller: {message, registrationId}
+    Controller --> Frontend: 200 OK {message, registrationId}
+    Frontend --> User: Hiển thị màn hình nhập OTP
+end
+
+== Bước 2: Xác thực OTP ==
+
+User -> Frontend: Nhập mã OTP
+Frontend -> Controller: POST /auth/register/verify\n(registrationId, otp)
+Controller -> Service: verifyOtp(registrationId, otp)
+
+Service -> Cache: get(`otp:${registrationId}`)
+Cache --> Service: storedOtp
+Service -> Cache: get(`registration:${registrationId}`)
+Cache --> Service: registrationData
+
+alt Invalid or expired OTP
+    Service --> Controller: throw BadRequestException
+    Controller --> Frontend: 400 Bad Request
+    Frontend --> User: Hiển thị lỗi "OTP không hợp lệ hoặc đã hết hạn"
+else Valid OTP
+    Service --> Controller: {message, registrationId}
+    Controller --> Frontend: 200 OK {message, registrationId}
+    Frontend --> User: Hiển thị form hoàn tất đăng ký
+end
+
+== Bước 3: Hoàn tất đăng ký ==
+
+User -> Frontend: Nhập thông tin cá nhân và mật khẩu
+Frontend -> Controller: POST /auth/register/complete\n(registrationId, password, fullName, dateOfBirth, gender)
+Controller -> Service: completeRegistration(completeDto)
+
+Service -> Cache: get(`registration:${registrationId}`)
+Cache --> Service: registrationData
+
+alt Registration data not found
+    Service --> Controller: throw BadRequestException
+    Controller --> Frontend: 400 Bad Request
+    Frontend --> User: Hiển thị lỗi "Phiên đăng ký đã hết hạn"
+else Registration data found
+    Service -> Service: bcrypt.hash(password, 10)
+
+    Service -> Prisma: user.create()
+    Prisma -> DB: INSERT INTO users, user_info, settings
+    DB --> Prisma: User data
+    Prisma --> Service: User object
+
+    Service -> Cache: del(`otp:${registrationId}`)
+    Service -> Cache: del(`registration:${registrationId}`)
+
+    Service --> Controller: {message, user}
+    Controller --> Frontend: 201 Created {message, user}
+    Frontend --> User: Hiển thị thông báo đăng ký thành công
+end
+
+@enduml

@@ -1,0 +1,40 @@
+@startuml Đồng bộ danh bạ - Activity Diagram
+title Đồng bộ danh bạ - Activity Diagram
+
+|User|
+start
+:Chọn đồng bộ danh bạ;
+:Cấp quyền truy cập danh bạ;
+:Gửi danh sách liên hệ từ thiết bị;
+
+|System|
+:Lấy ID người dùng từ token xác thực;
+:Lấy danh sách liên hệ hiện tại của người dùng;
+:Tạo map từ số điện thoại đến liên hệ hiện tại;
+:Tạo map từ số điện thoại đến tên liên hệ mới;
+
+:Tìm kiếm người dùng trong hệ thống có số điện thoại trùng với danh bạ;
+:Tạo map từ số điện thoại đến ID người dùng;
+
+:Xác định các liên hệ cần tạo mới;
+note right
+  Liên hệ cần tạo mới là những số điện thoại
+  đã có tài khoản trong hệ thống nhưng
+  chưa có trong danh sách liên hệ hiện tại của người dùng
+end note
+
+:Xác định các liên hệ cần xóa;
+note right
+  Liên hệ cần xóa là những liên hệ hiện tại
+  không còn trong danh bạ mới
+end note
+
+:Thực hiện tạo và xóa liên hệ trong transaction;
+:Trả về kết quả đồng bộ;
+
+|User|
+:Xem thông báo đồng bộ thành công;
+:Xem danh sách liên hệ đã đồng bộ;
+
+stop
+@enduml

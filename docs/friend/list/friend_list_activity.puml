@@ -1,0 +1,30 @@
+@startuml Xem danh sách bạn bè - Activity Diagram
+title Xem danh sách bạn bè - Activity Diagram
+
+|User|
+start
+:Chọn xem danh sách bạn bè;
+
+|System|
+:Lấy ID người dùng từ token xác thực;
+:Kiểm tra định dạng ID;
+
+if (ID hợp lệ?) then (Có)
+  :Truy vấn danh sách bạn bè từ cơ sở dữ liệu;
+  :Lọc các mối quan hệ có trạng thái ACCEPTED;
+  :Lấy thông tin chi tiết của từng người bạn;
+  :Sắp xếp danh sách theo thời gian cập nhật;
+  :Trả về danh sách bạn bè;
+else (Không)
+  :Trả về lỗi "ID người dùng không hợp lệ";
+endif
+
+|User|
+if (Lấy danh sách thành công?) then (Có)
+  :Xem danh sách bạn bè;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

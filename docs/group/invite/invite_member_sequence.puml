@@ -1,0 +1,81 @@
+@startuml Mời thành viên vào nhóm - Sequence Diagram
+title Mời thành viên vào nhóm - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "GroupController" as Controller
+entity "GroupService" as Service
+entity "PrismaService" as Prisma
+entity "GroupGateway" as Gateway
+entity "EventService" as Event
+database "Database" as DB
+queue "WebSocket" as WS
+
+User -> Frontend: Chọn nhóm và người dùng để thêm
+Frontend -> Controller: POST /groups/members\n{groupId, userId, addedById}
+
+Controller -> Service: addMember(addMemberDto)
+
+Service -> Prisma: group.findUnique()
+Prisma -> DB: SELECT * FROM groups\nWHERE id = ?
+DB --> Prisma: Group data
+Prisma --> Service: Group object
+
+Service -> Prisma: groupMember.findFirst()\n(kiểm tra người thêm)
+Prisma -> DB: SELECT * FROM group_members\nWHERE groupId = ? AND userId = ?
+DB --> Prisma: GroupMember data
+Prisma --> Service: GroupMember object
+
+alt Người thêm không phải thành viên hoặc không có quyền
+    Service --> Controller: throw ForbiddenException
+    Controller --> Frontend: 403 Forbidden
+    Frontend --> User: Hiển thị lỗi "Không có quyền thêm thành viên"
+else Người thêm có quyền
+    Service -> Prisma: groupMember.findFirst()\n(kiểm tra người được thêm)
+    Prisma -> DB: SELECT * FROM group_members\nWHERE groupId = ? AND userId = ?
+    DB --> Prisma: GroupMember data
+    Prisma --> Service: GroupMember object
+    
+    alt Người dùng đã là thành viên
+        Service --> Controller: throw BadRequestException
+        Controller --> Frontend: 400 Bad Request
+        Frontend --> User: Hiển thị lỗi "Người dùng đã là thành viên của nhóm"
+    else Người dùng chưa là thành viên
+        Service -> Prisma: groupMember.create()
+        Prisma -> DB: INSERT INTO group_members\n(groupId, userId, role=MEMBER, addedById)
+        DB --> Prisma: GroupMember data
+        Prisma --> Service: GroupMember object
+        
+        Service -> Prisma: user.findUnique()\n(lấy thông tin người dùng)
+        Prisma -> DB: SELECT * FROM users\nWHERE id = ?
+        DB --> Prisma: User data
+        Prisma --> Service: User object
+        
+        Service -> Gateway: notifyMemberAdded()
+        Gateway -> WS: emit('member_added', data)
+        
+        Service -> Event: emitGroupMemberAdded()
+        Event -> WS: emit('group_member_added', data)
+        
+        Service --> Controller: Formatted member object
+        Controller --> Frontend: 201 Created {member}
+        Frontend --> User: Hiển thị thông báo thêm thành viên thành công
+    end
+end
+
+@enduml

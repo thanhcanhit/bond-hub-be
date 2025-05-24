@@ -1,0 +1,75 @@
+@startuml Gửi lời mời kết bạn - Sequence Diagram
+title Gửi lời mời kết bạn - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "FriendController" as Controller
+entity "FriendService" as Service
+entity "PrismaService" as Prisma
+entity "FriendGateway" as Gateway
+database "Database" as DB
+queue "WebSocket" as WS
+
+User -> Frontend: Chọn gửi lời mời kết bạn
+User -> Frontend: Nhập lời giới thiệu (tùy chọn)
+Frontend -> Controller: POST /friends/request\n{receiverId, introduce}
+
+Controller -> Service: sendFriendRequest(senderId, dto)
+
+Service -> Service: isValidUUID(senderId, receiverId)
+alt ID không hợp lệ
+    Service --> Controller: throw BadRequestException
+    Controller --> Frontend: 400 Bad Request
+    Frontend --> User: Hiển thị lỗi "ID không hợp lệ"
+else ID hợp lệ
+    Service -> Prisma: user.findUnique() x2
+    Prisma -> DB: SELECT * FROM users\nWHERE id = ?
+    DB --> Prisma: Thông tin người dùng
+    Prisma --> Service: User objects
+    
+    alt Người dùng không tồn tại
+        Service --> Controller: throw NotFoundException
+        Controller --> Frontend: 404 Not Found
+        Frontend --> User: Hiển thị lỗi "Người dùng không tồn tại"
+    else Người dùng tồn tại
+        Service -> Prisma: friend.findFirst()
+        Prisma -> DB: SELECT * FROM friends\nWHERE (senderId = ? AND receiverId = ?)\nOR (senderId = ? AND receiverId = ?)
+        DB --> Prisma: Thông tin mối quan hệ
+        Prisma --> Service: Relationship object
+        
+        alt Đã có mối quan hệ
+            Service --> Controller: throw BadRequestException
+            Controller --> Frontend: 400 Bad Request
+            Frontend --> User: Hiển thị lỗi tương ứng
+        else Chưa có mối quan hệ
+            Service -> Prisma: friend.create()
+            Prisma -> DB: INSERT INTO friends\n(senderId, receiverId, status, introduce)
+            DB --> Prisma: Friend request data
+            Prisma --> Service: Friend request object
+            
+            Service -> Gateway: emitReloadEvent(senderId, receiverId)
+            Gateway -> WS: emit('reload')
+            
+            Service --> Controller: Friend request object
+            Controller --> Frontend: 201 Created {friendRequest}
+            Frontend --> User: Hiển thị thông báo gửi lời mời thành công
+        end
+    end
+end
+
+@enduml

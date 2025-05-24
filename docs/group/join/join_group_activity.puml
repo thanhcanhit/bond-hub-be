@@ -1,0 +1,41 @@
+@startuml Tham gia nhóm bằng QR code - Activity Diagram
+title Tham gia nhóm bằng QR code - Activity Diagram
+
+|User|
+start
+:Nhận mã QR chứa ID nhóm;
+:Quét mã QR;
+:Trích xuất ID nhóm từ mã QR (dạng group-groupId);
+:Xem thông tin nhóm;
+:Chọn tham gia nhóm;
+:Gửi yêu cầu tham gia nhóm;
+
+|System|
+:Lấy ID nhóm từ yêu cầu;
+:Kiểm tra nhóm có tồn tại không;
+
+if (Nhóm tồn tại?) then (Có)
+  :Kiểm tra người dùng đã là thành viên chưa;
+
+  if (Đã là thành viên?) then (Có)
+    :Trả về lỗi "Bạn đã là thành viên của nhóm này";
+  else (Không)
+    :Thêm người dùng vào nhóm với vai trò MEMBER;
+    :Lưu thông tin vào cơ sở dữ liệu;
+    :Gửi thông báo cho các thành viên khác qua WebSocket;
+    :Trả về thông tin thành viên mới;
+  endif
+else (Không)
+  :Trả về lỗi "Nhóm không tồn tại";
+endif
+
+|User|
+if (Tham gia nhóm thành công?) then (Có)
+  :Xem thông báo tham gia nhóm thành công;
+  :Chuyển đến màn hình nhóm;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

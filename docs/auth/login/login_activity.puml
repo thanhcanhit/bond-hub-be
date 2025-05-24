@@ -1,0 +1,42 @@
+@startuml Đăng nhập - Activity Diagram
+title Đăng nhập - Activity Diagram
+
+|User|
+start
+:Nhập thông tin đăng nhập (email/số điện thoại và mật khẩu);
+:Chọn loại thiết bị (DeviceType);
+:Gửi yêu cầu đăng nhập;
+
+|System|
+:Kiểm tra thông tin đăng nhập;
+
+if (Thông tin hợp lệ?) then (Có)
+  :Tìm kiếm người dùng theo email hoặc số điện thoại;
+  
+  if (Người dùng tồn tại?) then (Có)
+    :Xác thực mật khẩu;
+    
+    if (Mật khẩu đúng?) then (Có)
+      :Tạo access token và refresh token;
+      :Lưu thông tin phiên đăng nhập vào cơ sở dữ liệu;
+      :Trả về tokens và thông tin người dùng;
+    else (Không)
+      :Trả về lỗi "Thông tin đăng nhập không hợp lệ";
+    endif
+  else (Không)
+    :Trả về lỗi "Thông tin đăng nhập không hợp lệ";
+  endif
+else (Không)
+  :Trả về lỗi "Thông tin đăng nhập không đầy đủ";
+endif
+
+|User|
+if (Đăng nhập thành công?) then (Có)
+  :Lưu tokens vào thiết bị;
+  :Chuyển đến màn hình chính;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

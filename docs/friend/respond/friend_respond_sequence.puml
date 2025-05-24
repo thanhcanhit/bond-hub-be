@@ -1,0 +1,69 @@
+@startuml Phản hồi lời mời kết bạn - Sequence Diagram
+title Phản hồi lời mời kết bạn - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "FriendController" as Controller
+entity "FriendService" as Service
+entity "PrismaService" as Prisma
+entity "FriendGateway" as Gateway
+database "Database" as DB
+queue "WebSocket" as WS
+
+User -> Frontend: Chọn phản hồi lời mời kết bạn
+Frontend -> Controller: PUT /friends/respond\n{requestId, status}
+
+Controller -> Service: respondToFriendRequest(userId, dto)
+
+Service -> Service: isValidUUID(userId, requestId)
+alt ID không hợp lệ
+    Service --> Controller: throw BadRequestException
+    Controller --> Frontend: 400 Bad Request
+    Frontend --> User: Hiển thị lỗi "ID không hợp lệ"
+else ID hợp lệ
+    Service -> Prisma: friend.findUnique()
+    Prisma -> DB: SELECT * FROM friends\nWHERE id = ?
+    DB --> Prisma: Friend request data
+    Prisma --> Service: Friend request object
+    
+    alt Lời mời không tồn tại
+        Service --> Controller: throw NotFoundException
+        Controller --> Frontend: 404 Not Found
+        Frontend --> User: Hiển thị lỗi "Lời mời kết bạn không tồn tại"
+    else Lời mời tồn tại
+        alt Không phải người nhận lời mời
+            Service --> Controller: throw ForbiddenException
+            Controller --> Frontend: 403 Forbidden
+            Frontend --> User: Hiển thị lỗi "Không có quyền phản hồi lời mời này"
+        else Là người nhận lời mời
+            Service -> Prisma: friend.update()
+            Prisma -> DB: UPDATE friends\nSET status = ?\nWHERE id = ?
+            DB --> Prisma: Updated friend request
+            Prisma --> Service: Updated friend request object
+            
+            Service -> Gateway: emitReloadEvent(senderId, receiverId)
+            Gateway -> WS: emit('reload')
+            
+            Service --> Controller: Updated friend request object
+            Controller --> Frontend: 200 OK {updatedRequest}
+            Frontend --> User: Hiển thị thông báo phản hồi thành công
+        end
+    end
+end
+
+@enduml

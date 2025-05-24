@@ -1,0 +1,30 @@
+@startuml Cập nhật thông tin nhóm - Activity Diagram
+title Cập nhật thông tin nhóm - Activity Diagram
+
+|User|
+start
+:Chọn nhóm;
+:Chọn chức năng cập nhật thông tin nhóm;
+:Nhập thông tin mới (tên nhóm);
+:Gửi yêu cầu cập nhật thông tin nhóm;
+
+|System|
+:Kiểm tra quyền của người dùng;
+
+if (Có quyền cập nhật?) then (Có)
+  :Cập nhật thông tin nhóm trong cơ sở dữ liệu;
+  :Gửi thông báo cho tất cả thành viên qua WebSocket;
+  :Trả về thông tin nhóm đã cập nhật;
+else (Không)
+  :Trả về lỗi "Không có quyền cập nhật thông tin nhóm";
+endif
+
+|User|
+if (Cập nhật thành công?) then (Có)
+  :Xem thông tin nhóm đã cập nhật;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

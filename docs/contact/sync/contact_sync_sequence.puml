@@ -1,0 +1,80 @@
+@startuml Đồng bộ danh bạ - Sequence Diagram
+title Đồng bộ danh bạ - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "ContactController" as Controller
+entity "ContactService" as Service
+entity "PrismaService" as Prisma
+database "Database" as DB
+
+User -> Frontend: Chọn đồng bộ danh bạ
+User -> Frontend: Cấp quyền truy cập danh bạ
+Frontend -> Frontend: Đọc danh bạ từ thiết bị
+Frontend -> Controller: POST /contacts/sync\n{contacts: [{name, phone}, ...]}
+
+Controller -> Service: syncContacts(userId, contacts)
+
+Service -> Prisma: contact.findMany()
+Prisma -> DB: SELECT * FROM contacts\nWHERE userId = ?
+DB --> Prisma: Danh sách liên hệ hiện tại
+Prisma --> Service: Existing contacts
+
+Service -> Service: Tạo map từ số điện thoại đến liên hệ hiện tại
+Service -> Service: Tạo map từ số điện thoại đến tên liên hệ mới
+
+Service -> Prisma: user.findMany()
+Prisma -> DB: SELECT * FROM users\nWHERE phoneNumber IN (?)
+DB --> Prisma: Danh sách người dùng có số điện thoại trùng
+Prisma --> Service: Users with matching phone numbers
+
+Service -> Service: Tạo map từ số điện thoại đến ID người dùng
+Service -> Service: Xác định các liên hệ cần tạo mới
+Service -> Service: Xác định các liên hệ cần xóa
+
+Service -> Prisma: $transaction()
+Prisma -> DB: BEGIN TRANSACTION
+alt Có liên hệ cần tạo mới
+    Prisma -> DB: INSERT INTO contacts\n(userId, contactUserId, nickname)
+end
+alt Có liên hệ cần xóa
+    Prisma -> DB: DELETE FROM contacts\nWHERE id IN (?)
+end
+Prisma -> DB: COMMIT TRANSACTION
+DB --> Prisma: Transaction result
+Prisma --> Service: Transaction result
+
+Service --> Controller: {message, created, deleted}
+Controller --> Frontend: 200 OK {message, created, deleted}
+Frontend --> User: Hiển thị thông báo đồng bộ thành công
+
+User -> Frontend: Chọn xem danh sách liên hệ
+Frontend -> Controller: GET /contacts
+Controller -> Service: getUserContacts(userId)
+
+Service -> Prisma: contact.findMany()
+Prisma -> DB: SELECT * FROM contacts\nWHERE userId = ?
+DB --> Prisma: Danh sách liên hệ
+Prisma --> Service: Contacts with user info
+
+Service -> Service: Xử lý và định dạng dữ liệu
+Service --> Controller: Danh sách liên hệ đã xử lý
+Controller --> Frontend: 200 OK {contacts: [...]}
+Frontend --> User: Hiển thị danh sách liên hệ
+
+@enduml

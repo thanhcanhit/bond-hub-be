@@ -1,0 +1,64 @@
+@startuml Đăng xuất - Sequence Diagram
+title Đăng xuất - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "AuthController" as Controller
+entity "AuthService" as Service
+entity "PrismaService" as Prisma
+entity "AuthGateway" as Gateway
+database "Database" as DB
+queue "WebSocket" as WS
+
+User -> Frontend: Chọn đăng xuất
+Frontend -> Controller: POST /auth/logout\nHeaders: {refresh-token: token}
+
+Controller -> Service: logout(refreshToken)
+
+alt No refresh token
+    Controller --> Frontend: 401 Unauthorized
+    Frontend --> User: Hiển thị lỗi "Refresh token là bắt buộc"
+else Has refresh token
+    Service -> Prisma: refreshToken.findFirst(token)
+    Prisma -> DB: SELECT * FROM refresh_tokens\nWHERE token = ?
+    DB --> Prisma: Refresh token data
+    Prisma --> Service: refreshTokenRecord
+
+    alt Token not found or already revoked
+        Service --> Controller: throw UnauthorizedException
+        Controller --> Frontend: 401 Unauthorized
+        Frontend --> User: Hiển thị lỗi "Refresh token không hợp lệ"
+    else Token found
+        Service -> Prisma: refreshToken.update(isRevoked: true)
+        Prisma -> DB: UPDATE refresh_tokens\nSET isRevoked = true\nWHERE id = ?
+        DB --> Prisma: Updated record
+        Prisma --> Service: Updated token
+
+        Service -> Gateway: notifyDeviceLogout(userId, deviceId)
+        Gateway -> WS: emit('force_logout', {deviceId})
+        WS --> Frontend: WebSocket event: 'force_logout'
+
+        Service --> Controller: {message: "Logged out successfully"}
+        Controller --> Frontend: 200 OK {message}
+
+        Frontend -> Frontend: Xóa tokens
+        Frontend --> User: Chuyển đến màn hình đăng nhập
+    end
+end
+
+@enduml

@@ -1,0 +1,67 @@
+@startuml Tìm kiếm người dùng - Activity Diagram
+title Tìm kiếm người dùng - Activity Diagram
+
+|User|
+start
+:Chọn phương thức tìm kiếm;
+
+if (Phương thức?) then (Email/Số điện thoại)
+  :Nhập email hoặc số điện thoại;
+  :Gửi yêu cầu tìm kiếm;
+else (QR Code/ID)
+  :Quét mã QR chứa ID người dùng;
+  :Trích xuất ID người dùng từ mã QR;
+  :Gửi yêu cầu tìm kiếm theo ID;
+endif
+
+|System|
+:Lấy ID người dùng hiện tại từ token xác thực;
+
+if (Phương thức tìm kiếm?) then (Email/Số điện thoại)
+  :Kiểm tra thông tin tìm kiếm;
+
+  if (Thông tin hợp lệ?) then (Có)
+    :Tìm kiếm người dùng trong cơ sở dữ liệu theo email/số điện thoại;
+
+    if (Tìm thấy người dùng?) then (Có)
+      :Kiểm tra cài đặt quyền riêng tư;
+
+      if (Cho phép tìm kiếm?) then (Có)
+        :Lấy thông tin mối quan hệ với người dùng hiện tại;
+        :Trả về thông tin người dùng và mối quan hệ;
+      else (Không)
+        :Trả về lỗi "Người dùng không cho phép tìm kiếm";
+      endif
+    else (Không)
+      :Trả về lỗi "Không tìm thấy người dùng";
+    endif
+  else (Không)
+    :Trả về lỗi "Thông tin tìm kiếm không hợp lệ";
+  endif
+else (QR Code/ID)
+  :Kiểm tra định dạng ID người dùng;
+
+  if (ID hợp lệ?) then (Có)
+    :Tìm kiếm người dùng trong cơ sở dữ liệu theo ID;
+
+    if (Tìm thấy người dùng?) then (Có)
+      :Lấy thông tin mối quan hệ với người dùng hiện tại;
+      :Trả về thông tin người dùng và mối quan hệ;
+    else (Không)
+      :Trả về lỗi "Không tìm thấy người dùng";
+    endif
+  else (Không)
+    :Trả về lỗi "ID người dùng không hợp lệ";
+  endif
+endif
+
+|User|
+if (Tìm kiếm thành công?) then (Có)
+  :Xem thông tin người dùng;
+  :Có thể gửi lời mời kết bạn;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

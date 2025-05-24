@@ -1,0 +1,48 @@
+@startuml Xem danh sách bạn bè - Sequence Diagram
+title Xem danh sách bạn bè - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "FriendController" as Controller
+entity "FriendService" as Service
+entity "PrismaService" as Prisma
+database "Database" as DB
+
+User -> Frontend: Chọn xem danh sách bạn bè
+Frontend -> Controller: GET /friends/list
+
+Controller -> Service: getFriendList(userId)
+
+Service -> Service: isValidUUID(userId)
+alt ID không hợp lệ
+    Service --> Controller: throw BadRequestException
+    Controller --> Frontend: 400 Bad Request
+    Frontend --> User: Hiển thị lỗi "ID người dùng không hợp lệ"
+else ID hợp lệ
+    Service -> Prisma: friend.findMany()
+    Prisma -> DB: SELECT * FROM friends\nWHERE (senderId = ? OR receiverId = ?)\nAND status = 'ACCEPTED'
+    DB --> Prisma: Danh sách bạn bè
+    Prisma --> Service: Danh sách bạn bè
+
+    Service -> Service: Xử lý và định dạng dữ liệu
+    Service --> Controller: Danh sách bạn bè đã xử lý
+    Controller --> Frontend: 200 OK {friends: [...]}
+    Frontend --> User: Hiển thị danh sách bạn bè
+end
+
+@enduml

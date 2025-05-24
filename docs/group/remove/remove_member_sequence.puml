@@ -1,0 +1,84 @@
+@startuml Xóa thành viên khỏi nhóm - Sequence Diagram
+title Xóa thành viên khỏi nhóm - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "GroupController" as Controller
+entity "GroupService" as Service
+entity "PrismaService" as Prisma
+entity "GroupGateway" as Gateway
+entity "EventService" as Event
+database "Database" as DB
+queue "WebSocket" as WS
+
+User -> Frontend: Chọn thành viên cần xóa
+Frontend -> Controller: POST /groups/:groupId/members/:userId/kick
+
+Controller -> Service: kickMember(groupId, kickUserId, requestUserId)
+
+Service -> Prisma: group.findUnique()
+Prisma -> DB: SELECT * FROM groups\nWHERE id = ?
+DB --> Prisma: Group data with members
+Prisma --> Service: Group object with members
+
+alt Nhóm không tồn tại
+    Service --> Controller: throw NotFoundException
+    Controller --> Frontend: 404 Not Found
+    Frontend --> User: Hiển thị lỗi "Nhóm không tồn tại"
+else Nhóm tồn tại
+    Service -> Service: Tìm thành viên yêu cầu và thành viên bị xóa
+    
+    alt Người yêu cầu không phải thành viên
+        Service --> Controller: throw ForbiddenException
+        Controller --> Frontend: 403 Forbidden
+        Frontend --> User: Hiển thị lỗi "Bạn không phải thành viên của nhóm này"
+    else Người bị xóa không tồn tại
+        Service --> Controller: throw NotFoundException
+        Controller --> Frontend: 404 Not Found
+        Frontend --> User: Hiển thị lỗi "Thành viên không tồn tại trong nhóm"
+    else Đang tự xóa mình
+        Service --> Controller: throw BadRequestException
+        Controller --> Frontend: 400 Bad Request
+        Frontend --> User: Hiển thị lỗi "Không thể tự xóa mình. Hãy sử dụng chức năng rời nhóm."
+    else Thành viên bị xóa là trưởng nhóm
+        Service --> Controller: throw ForbiddenException
+        Controller --> Frontend: 403 Forbidden
+        Frontend --> User: Hiển thị lỗi "Không thể xóa trưởng nhóm"
+    else Thành viên bị xóa là phó nhóm và người xóa không phải trưởng nhóm
+        Service --> Controller: throw ForbiddenException
+        Controller --> Frontend: 403 Forbidden
+        Frontend --> User: Hiển thị lỗi "Chỉ trưởng nhóm mới có thể xóa phó nhóm"
+    else Có quyền xóa
+        Service -> Prisma: groupMember.deleteMany()
+        Prisma -> DB: DELETE FROM group_members\nWHERE groupId = ? AND userId = ?
+        DB --> Prisma: Delete result
+        Prisma --> Service: Delete result
+        
+        Service -> Gateway: notifyMemberRemoved()
+        Gateway -> WS: emit('member_removed', data)
+        
+        Service -> Event: emitGroupMemberRemoved()
+        Event -> WS: emit('group_member_removed', data)
+        
+        Service --> Controller: void
+        Controller --> Frontend: 204 No Content
+        Frontend --> User: Hiển thị thông báo xóa thành viên thành công
+    end
+end
+
+@enduml

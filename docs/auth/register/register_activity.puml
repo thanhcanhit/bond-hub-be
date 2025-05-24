@@ -1,0 +1,78 @@
+@startuml Đăng ký - Activity Diagram
+title Đăng ký - Activity Diagram
+
+|User|
+start
+:Nhập thông tin liên hệ (email/số điện thoại);
+:Gửi yêu cầu đăng ký;
+
+|System|
+:Kiểm tra thông tin liên hệ;
+
+if (Thông tin hợp lệ?) then (Có)
+  :Kiểm tra email/số điện thoại đã tồn tại;
+  
+  if (Đã tồn tại?) then (Có)
+    :Trả về lỗi "Email/Số điện thoại đã được đăng ký";
+  else (Không)
+    :Tạo mã OTP;
+    :Lưu thông tin đăng ký và OTP vào cache;
+    if (Có email?) then (Có)
+      :Gửi OTP qua email;
+    endif
+    if (Có số điện thoại?) then (Có)
+      :Gửi OTP qua SMS;
+    endif
+    :Trả về registrationId;
+  endif
+else (Không)
+  :Trả về lỗi "Thông tin không hợp lệ";
+endif
+
+|User|
+if (Nhận được registrationId?) then (Có)
+  :Nhập mã OTP;
+  :Gửi yêu cầu xác thực OTP;
+else (Không)
+  :Hiển thị thông báo lỗi;
+  stop
+endif
+
+|System|
+:Kiểm tra OTP;
+if (OTP hợp lệ?) then (Có)
+  :Xác nhận OTP thành công;
+  :Trả về thông báo xác thực thành công;
+else (Không)
+  :Trả về lỗi "OTP không hợp lệ";
+  stop
+endif
+
+|User|
+:Nhập thông tin cá nhân (họ tên, ngày sinh, giới tính);
+:Nhập mật khẩu;
+:Gửi yêu cầu hoàn tất đăng ký;
+
+|System|
+:Kiểm tra thông tin;
+if (Thông tin hợp lệ?) then (Có)
+  :Lấy thông tin đăng ký từ cache;
+  :Mã hóa mật khẩu;
+  :Tạo tài khoản người dùng;
+  :Tạo thông tin người dùng;
+  :Tạo cài đặt mặc định;
+  :Xóa dữ liệu đăng ký khỏi cache;
+  :Trả về thông tin người dùng;
+else (Không)
+  :Trả về lỗi "Thông tin không hợp lệ";
+endif
+
+|User|
+if (Đăng ký thành công?) then (Có)
+  :Chuyển đến màn hình đăng nhập;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

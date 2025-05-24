@@ -1,0 +1,42 @@
+@startuml Hủy lời mời kết bạn - Activity Diagram
+title Hủy lời mời kết bạn - Activity Diagram
+
+|User|
+start
+:Xem danh sách lời mời đã gửi;
+:Chọn lời mời muốn hủy;
+:Gửi yêu cầu hủy lời mời;
+
+|System|
+:Lấy ID người dùng từ token xác thực;
+:Kiểm tra định dạng ID người dùng và ID lời mời;
+
+if (ID hợp lệ?) then (Có)
+  :Tìm kiếm lời mời kết bạn;
+  
+  if (Lời mời tồn tại?) then (Có)
+    :Kiểm tra người dùng có phải người gửi lời mời không;
+    
+    if (Là người gửi?) then (Có)
+      :Xóa lời mời kết bạn khỏi cơ sở dữ liệu;
+      :Gửi thông báo qua WebSocket;
+      :Trả về thông báo hủy thành công;
+    else (Không)
+      :Trả về lỗi "Không có quyền hủy lời mời này";
+    endif
+  else (Không)
+    :Trả về lỗi "Lời mời kết bạn không tồn tại";
+  endif
+else (Không)
+  :Trả về lỗi "ID không hợp lệ";
+endif
+
+|User|
+if (Hủy lời mời thành công?) then (Có)
+  :Xem thông báo hủy lời mời thành công;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

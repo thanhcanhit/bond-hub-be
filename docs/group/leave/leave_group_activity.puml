@@ -1,0 +1,37 @@
+@startuml Rời nhóm - Activity Diagram
+title Rời nhóm - Activity Diagram
+
+|User|
+start
+:Chọn nhóm;
+:Chọn chức năng rời nhóm;
+:Xác nhận rời nhóm;
+:Gửi yêu cầu rời nhóm;
+
+|System|
+:Kiểm tra người dùng có phải thành viên của nhóm không;
+
+if (Là thành viên?) then (Có)
+  :Kiểm tra vai trò của người dùng;
+  
+  if (Là trưởng nhóm?) then (Có)
+    :Trả về lỗi "Trưởng nhóm không thể rời nhóm. Hãy chuyển quyền trưởng nhóm trước.";
+  else (Không)
+    :Xóa thành viên khỏi nhóm;
+    :Gửi thông báo cho các thành viên khác qua WebSocket;
+    :Trả về thông báo rời nhóm thành công;
+  endif
+else (Không)
+  :Trả về lỗi "Bạn không phải thành viên của nhóm này";
+endif
+
+|User|
+if (Rời nhóm thành công?) then (Có)
+  :Xem thông báo rời nhóm thành công;
+  :Chuyển đến danh sách nhóm;
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml

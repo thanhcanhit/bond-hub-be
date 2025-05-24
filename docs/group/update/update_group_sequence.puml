@@ -1,0 +1,64 @@
+@startuml Cập nhật thông tin nhóm - Sequence Diagram
+title Cập nhật thông tin nhóm - Sequence Diagram
+
+skinparam sequenceParticipant {
+    BorderColor grey
+    BackgroundColor white
+    FontColor black
+}
+
+skinparam sequenceLifeLine {
+    BorderColor grey
+    BackgroundColor white
+}
+
+skinparam sequenceArrow {
+    Color black
+}
+
+actor User
+boundary "Frontend" as Frontend
+control "GroupController" as Controller
+entity "GroupService" as Service
+entity "PrismaService" as Prisma
+entity "GroupGateway" as Gateway
+entity "EventService" as Event
+database "Database" as DB
+queue "WebSocket" as WS
+
+User -> Frontend: Nhập thông tin mới cho nhóm
+Frontend -> Controller: PATCH /groups/:id\n{name}
+
+Controller -> Service: update(id, updateGroupDto, requestUserId)
+
+Service -> Service: validateGroupAccess(id, requestUserId, 'update group details')
+
+Service -> Prisma: group.findUnique()
+Prisma -> DB: SELECT * FROM groups\nWHERE id = ?
+DB --> Prisma: Group data with members
+Prisma --> Service: Group object with members
+
+Service -> Service: Kiểm tra người dùng có quyền cập nhật
+
+alt Không có quyền cập nhật
+    Service --> Controller: throw ForbiddenException
+    Controller --> Frontend: 403 Forbidden
+    Frontend --> User: Hiển thị lỗi "Không có quyền cập nhật thông tin nhóm"
+else Có quyền cập nhật
+    Service -> Prisma: group.update()
+    Prisma -> DB: UPDATE groups\nSET name = ?\nWHERE id = ?
+    DB --> Prisma: Updated group data
+    Prisma --> Service: Updated group object
+    
+    Service -> Gateway: notifyGroupUpdated()
+    Gateway -> WS: emit('group_updated', data)
+    
+    Service -> Event: emitGroupUpdated()
+    Event -> WS: emit('group_updated', data)
+    
+    Service --> Controller: Updated group object
+    Controller --> Frontend: 200 OK {group}
+    Frontend --> User: Hiển thị thông tin nhóm đã cập nhật
+end
+
+@enduml

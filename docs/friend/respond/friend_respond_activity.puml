@@ -1,0 +1,54 @@
+@startuml Phản hồi lời mời kết bạn - Activity Diagram
+title Phản hồi lời mời kết bạn - Activity Diagram
+
+|User|
+start
+:Xem danh sách lời mời kết bạn;
+:Chọn lời mời kết bạn;
+:Chọn phản hồi (Chấp nhận/Từ chối/Chặn);
+:Gửi phản hồi;
+
+|System|
+:Lấy ID người dùng từ token xác thực;
+:Kiểm tra định dạng ID người dùng và ID lời mời;
+
+if (ID hợp lệ?) then (Có)
+  :Tìm kiếm lời mời kết bạn;
+  
+  if (Lời mời tồn tại?) then (Có)
+    :Kiểm tra người dùng có phải người nhận lời mời không;
+    
+    if (Là người nhận?) then (Có)
+      if (Phản hồi?) then (Chấp nhận)
+        :Cập nhật trạng thái lời mời thành ACCEPTED;
+      elseif (Phản hồi?) then (Từ chối)
+        :Cập nhật trạng thái lời mời thành DECLINED;
+      else (Chặn)
+        :Cập nhật trạng thái lời mời thành BLOCKED;
+      endif
+      
+      :Lưu thay đổi vào cơ sở dữ liệu;
+      :Gửi thông báo qua WebSocket;
+      :Trả về thông tin lời mời đã cập nhật;
+    else (Không)
+      :Trả về lỗi "Không có quyền phản hồi lời mời này";
+    endif
+  else (Không)
+    :Trả về lỗi "Lời mời kết bạn không tồn tại";
+  endif
+else (Không)
+  :Trả về lỗi "ID không hợp lệ";
+endif
+
+|User|
+if (Phản hồi thành công?) then (Có)
+  :Xem thông báo phản hồi thành công;
+  if (Đã chấp nhận?) then (Có)
+    :Xem người dùng trong danh sách bạn bè;
+  endif
+else (Không)
+  :Hiển thị thông báo lỗi;
+endif
+
+stop
+@enduml
