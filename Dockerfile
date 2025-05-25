@@ -56,5 +56,5 @@ COPY --from=build-stage /app/tsconfig.json ./
 # Expose port
 EXPOSE 3000
 
-# Start application
-CMD ["npm", "start"]
+# Start application with database setup and seeding
+CMD npm run db:setup && npm run db:seed && npm start
