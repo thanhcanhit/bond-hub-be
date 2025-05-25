@@ -232,8 +232,6 @@ export class AiService {
       const defaultMaxLength = Math.max(Math.floor(text.length * 0.3), 100);
       const maxLengthValue = maxLength ? parseInt(maxLength) : defaultMaxLength;
 
-      const maxLengthInstructions = `Tóm tắt phải ngắn gọn, không quá ${maxLengthValue} ký tự.`;
-
       // Get the model for summarization (using flash model for faster response)
       const model = this.genAI.getGenerativeModel({
         model: this.flashModel,
@@ -260,54 +258,76 @@ export class AiService {
       // Prepare context instructions
       let contextInstructions = '';
       if (previousMessages && previousMessages.length > 0) {
-        contextInstructions = '\n\nĐây là ngữ cảnh trước đó:\n';
+        contextInstructions = '\n\nPrevious conversation context:\n';
         previousMessages.forEach((msg) => {
-          contextInstructions += `- ${msg.senderName} (${msg.type}): "${msg.content}"\n`;
+          contextInstructions += `${msg.senderName} (${msg.type}): ${msg.content}\n`;
         });
-        contextInstructions +=
-          '\nHãy sử dụng ngữ cảnh trên để tóm tắt tốt hơn.';
       }
 
-      // Prepare system instructions for super-concise summarization
-      const systemInstructions = `Bạn là chuyên gia tóm tắt thông minh. Nhiệm vụ: giúp người đọc HIỂU RÕ ngữ cảnh và nội dung chính của văn bản trong KHÔNG QUÁ ${maxLengthValue} ký tự.
+      // System instructions in English for better AI comprehension
+      const systemInstructions = `SMART SUMMARIZATION - MAX ${maxLengthValue} CHARACTERS
 
-Quy tắc tóm tắt thông minh:
-- Tập trung vào việc truyền tải NGỮ CẢNH và Ý NGHĨA CHÍNH
-- Đảm bảo người đọc hiểu được BỐI CẢNH và MỐI LIÊN HỆ giữa các thông tin
-- Giữ lại các CHI TIẾT QUAN TRỌNG giúp hiểu rõ ngữ cảnh
-- Sử dụng từ ngữ RÕ RÀNG, DỄ HIỂU
-- Ưu tiên cấu trúc logic, mạch lạc
-- Giữ lại số liệu và từ khóa quan trọng
-- Loại bỏ thông tin thừa, không liên quan
-- KHÔNG thêm các câu mở đầu như "Được rồi", "Tôi sẽ", "Đây là tóm tắt"
-- Trả lời TRỰC TIẾP với nội dung cần thiết
+MANDATORY RULES:
+1. Return ONLY the summary content, NO introductions or formatting
+2. DO NOT start with "I will", "Here is", "Summary", "Below"
+3. DO NOT use bullet points, numbering, or special symbols
+4. DO NOT add personal comments, evaluations, or conclusions
+5. MAXIMUM ${maxLengthValue} characters including spaces
 
-${maxLengthInstructions} Viết bằng tiếng Việt nếu văn bản gốc là tiếng Việt.`;
+SUMMARIZATION APPROACH:
+- Extract core information and important context
+- Retain key details that help understand the situation
+- Use concise, clear language
+- Combine related information into flowing sentences
+- Prioritize information that helps readers grasp the full picture
 
-      // Generate summary without using system role (not supported in Gemini-2.0-Flash)
+LANGUAGE: Write in Vietnamese if original text is Vietnamese, English if original text is English.`;
+
+      // Generate summary
       const result = await model.generateContent({
         contents: [
           {
             role: 'user',
             parts: [
               {
-                text: `${systemInstructions}\n\nĐây là văn bản cần tóm tắt:\n\n${text}${contextInstructions}\n\nTạo tóm tắt CỰC NGẮN GỌN (tối đa ${maxLengthValue} ký tự) cung cấp TINH TÚY của văn bản, đảm bảo người đọc nắm bắt được nội dung thiết yếu.`,
+                text: `${systemInstructions}\n\nTEXT TO SUMMARIZE:\n${text}${contextInstructions}`,
               },
             ],
           },
         ],
       });
 
-      let summary = result.response.text();
+      let summary = result.response.text().trim();
+
+      // Clean up any unwanted prefixes
+      const unwantedPrefixes = [
+        'Tóm tắt:',
+        'Tóm tắt',
+        'Đây là tóm tắt:',
+        'Đây là tóm tắt',
+        'Nội dung tóm tắt:',
+        'Nội dung:',
+        'Dưới đây là tóm tắt:',
+        'Tôi sẽ tóm tắt:',
+        'Được rồi,',
+        'Được rồi:',
+        'Summary:',
+        'Here is the summary:',
+        'The summary is:',
+        'Summary',
+      ];
+
+      for (const prefix of unwantedPrefixes) {
+        if (summary.toLowerCase().startsWith(prefix.toLowerCase())) {
+          summary = summary.substring(prefix.length).trim();
+        }
+      }
 
       // Ensure summary doesn't exceed the max length
       if (summary.length > maxLengthValue) {
         this.logger.log(
           `Summary exceeds max length (${summary.length}/${maxLengthValue}), truncating...`,
         );
-        const model = this.genAI.getGenerativeModel({
-          model: this.flashModel,
-        });
 
         const truncationResult = await model.generateContent({
           contents: [
@@ -315,14 +335,28 @@ ${maxLengthInstructions} Viết bằng tiếng Việt nếu văn bản gốc là
               role: 'user',
               parts: [
                 {
-                  text: `Đây là một bản tóm tắt nhưng vẫn quá dài (${summary.length} ký tự):\n\n"${summary}"\n\nHãy rút gọn lại, KHÔNG QUÁ ${maxLengthValue} ký tự, giữ lại ý chính quan trọng nhất.`,
+                  text: `TASK: Shorten the text below to maximum ${maxLengthValue} characters while preserving the main meaning.
+
+RULES:
+- Return ONLY the shortened content
+- NO introductions or comments
+- Maximum ${maxLengthValue} characters
+
+TEXT TO SHORTEN:\n${summary}`,
                 },
               ],
             },
           ],
         });
 
-        summary = truncationResult.response.text();
+        summary = truncationResult.response.text().trim();
+
+        // Clean unwanted prefixes again after truncation
+        for (const prefix of unwantedPrefixes) {
+          if (summary.toLowerCase().startsWith(prefix.toLowerCase())) {
+            summary = summary.substring(prefix.length).trim();
+          }
+        }
       }
 
       return { summary };
@@ -372,52 +406,87 @@ ${maxLengthInstructions} Viết bằng tiếng Việt nếu văn bản gốc là
       // Prepare context instructions
       let contextInstructions = '';
       if (previousMessages && previousMessages.length > 0) {
-        contextInstructions = '\n\nĐây là ngữ cảnh trước đó:\n';
+        contextInstructions = '\n\nConversation context:\n';
         previousMessages.forEach((msg) => {
-          contextInstructions += `- ${msg.senderName} (${msg.type}): "${msg.content}"\n`;
+          contextInstructions += `${msg.senderName} (${msg.type}): ${msg.content}\n`;
         });
-        contextInstructions +=
-          '\nHãy sử dụng ngữ cảnh trên để cải thiện tin nhắn phù hợp hơn.';
       }
 
-      // Prepare system instructions with enhanced EQ focus
-      const systemInstructions = `Bạn là một trợ lý cải thiện cách giao tiếp với trí tuệ cảm xúc (EQ) cao. Nhiệm vụ của bạn là nâng cấp tin nhắn của người dùng để thể hiện sự chuyên nghiệp, tế nhị và tinh tế trong môi trường làm việc.
-      
-      Hướng dẫn về EQ và cách ăn nói khéo léo:
-      - Thể hiện sự tôn trọng và thấu hiểu đối với người nhận
-      - Sử dụng ngôn từ tích cực, xây dựng thay vì tiêu cực, áp đặt
-      - Điều chỉnh độ trang trọng phù hợp với mối quan hệ và văn hóa công ty
-      - Thêm biểu hiện cảm xúc phù hợp (nhưng không quá lố)
-      - Sử dụng câu từ truyền cảm hứng và động viên khi cần thiết
-      - Khi từ chối hay đưa ra phản hồi tiêu cực, hãy làm một cách nhẹ nhàng và xây dựng
-      - Tạo cảm giác thân thiện nhưng vẫn chuyên nghiệp
-      - Tránh giọng điệu cứng nhắc hoặc máy móc
-      
-      Nguyên tắc cơ bản:
-      - Giữ nguyên ý chính và nội dung quan trọng của tin nhắn
-      - Cải thiện cách diễn đạt để thể hiện EQ cao hơn
-      - Sửa lỗi chính tả và ngữ pháp
-      - Giữ nguyên ngôn ngữ của tin nhắn gốc (tiếng Việt hoặc tiếng Anh)
-      - Không thay đổi thông tin thực tế hoặc thêm dữ liệu mới
-      - Giữ độ dài tương đương với tin nhắn gốc
-      - KHÔNG thêm các câu mở đầu như "Được rồi", "Tôi sẽ", "Đây là tin nhắn đã được cải thiện"
-      - Trả lời TRỰC TIẾP với nội dung cần thiết`;
+      // System instructions in English for better AI comprehension
+      const systemInstructions = `PROFESSIONAL MESSAGE ENHANCEMENT
 
-      // Generate enhanced message without using system role
+MANDATORY RULES:
+1. Return ONLY the enhanced message
+2. NO introductions like "Here is the improved message", "I will", "Okay"
+3. NO comments or explanations
+4. DO NOT change main content or factual information
+5. DO NOT add new information not present in original message
+
+EQ & COMMUNICATION PRINCIPLES:
+- Show respect and understanding for the recipient
+- Use positive, constructive language instead of negative
+- Adjust formality level appropriate for work relationships
+- Add subtle emotional expressions, not excessive
+- Inspire and encourage when appropriate
+- Handle negative feedback gently and constructively
+- Be friendly while maintaining professionalism
+- Avoid rigid or robotic tone
+
+ENHANCEMENT TECHNIQUES:
+- Fix spelling and grammar errors
+- Improve sentence structure for clarity
+- Add appropriate polite expressions
+- Adjust tone to fit workplace environment
+- Maintain original length and overall style
+
+LANGUAGE: Keep the same language as the original message (Vietnamese or English).`;
+
+      // Generate enhanced message
       const result = await model.generateContent({
         contents: [
           {
             role: 'user',
             parts: [
               {
-                text: `${systemInstructions}\n\nĐây là tin nhắn cần cải thiện:\n\n"${message}"${contextInstructions}\n\nHãy cải thiện tin nhắn trên để thể hiện EQ cao và cách ăn nói khéo léo trong môi trường làm việc.`,
+                text: `${systemInstructions}\n\nMESSAGE TO ENHANCE:\n"${message}"${contextInstructions}`,
               },
             ],
           },
         ],
       });
 
-      const enhancedMessage = result.response.text();
+      let enhancedMessage = result.response.text().trim();
+
+      // Clean up any unwanted prefixes or formatting
+      const unwantedPrefixes = [
+        'Đây là tin nhắn đã được cải thiện:',
+        'Đây là tin nhắn đã cải thiện:',
+        'Tin nhắn đã được nâng cấp:',
+        'Tin nhắn sau khi cải thiện:',
+        'Phiên bản cải thiện:',
+        'Tôi sẽ cải thiện:',
+        'Được rồi,',
+        'Được rồi:',
+        'Here is the enhanced message:',
+        'Enhanced message:',
+        'The improved message is:',
+        'Improved version:',
+      ];
+
+      for (const prefix of unwantedPrefixes) {
+        if (enhancedMessage.toLowerCase().startsWith(prefix.toLowerCase())) {
+          enhancedMessage = enhancedMessage.substring(prefix.length).trim();
+        }
+      }
+
+      // Remove quotes if the entire message is wrapped in quotes
+      if (enhancedMessage.startsWith('"') && enhancedMessage.endsWith('"')) {
+        enhancedMessage = enhancedMessage.slice(1, -1).trim();
+      }
+      if (enhancedMessage.startsWith("'") && enhancedMessage.endsWith("'")) {
+        enhancedMessage = enhancedMessage.slice(1, -1).trim();
+      }
+
       return { enhancedMessage };
     } catch (error) {
       this.logger.error('Error enhancing message:', error);
