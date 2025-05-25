@@ -12,6 +12,7 @@ import {
   Request,
   UploadedFiles,
   UseInterceptors,
+  HttpCode,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { MessageService } from './message.service';
@@ -146,23 +147,37 @@ export class MessageController {
     return this.messageService.deleteMessageSelfSide(messageId, requestUserId);
   }
 
-  @Patch('/read/:messageId')
+  @Post('read/:messageId')
   async readMessage(
     @Param('messageId', ParseUUIDPipe) messageId: string,
     @Request() req: Request,
   ) {
     try {
       const requestUserId = req['user'].sub;
-      return await this.messageService.readMessage(messageId, requestUserId);
+      const result = await this.messageService.readMessage(
+        messageId,
+        requestUserId,
+      );
+
+      // Nếu result là null, trả về response thành công nhưng với success: false
+      if (!result) {
+        return {
+          success: false,
+          message: 'Message was not marked as read',
+        };
+      }
+
+      return {
+        success: true,
+        data: result,
+      };
     } catch (error) {
-      // Log lỗi nhưng vẫn trả về response thành công để tránh làm gián đoạn UI
       console.error(
         `Error marking message ${messageId} as read: ${error.message}`,
       );
       return {
         success: false,
-        message:
-          'Failed to mark message as read, but UI will continue to function',
+        message: 'Failed to mark message as read',
         error: error.message,
       };
     }
@@ -229,5 +244,31 @@ export class MessageController {
     // Thông báo qua WebSocket được xử lý tự động trong MessageService
 
     return results;
+  }
+
+  @Post('/read-all/:type/:targetId')
+  @HttpCode(200)
+  async markAllAsRead(
+    @Param('type') type: 'USER' | 'GROUP',
+    @Param('targetId', ParseUUIDPipe) targetId: string,
+    @Request() req: Request,
+  ) {
+    try {
+      const requestUserId = req['user'].sub;
+      const result = await this.messageService.markAllAsRead(
+        requestUserId,
+        targetId,
+        type,
+      );
+
+      return result;
+    } catch (error) {
+      console.error(`Error marking all messages as read: ${error.message}`);
+      return {
+        success: false,
+        message: 'Failed to mark messages as read',
+        error: error.message,
+      };
+    }
   }
 }

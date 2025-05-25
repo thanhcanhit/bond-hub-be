@@ -595,22 +595,70 @@ export class MessageService {
 
   async readMessage(messageId: string, readerId: string) {
     try {
+      // 1. Kiểm tra tin nhắn tồn tại
       const message = await this.findMessageById(messageId);
       if (!message) {
-        throw new ForbiddenException('Message not found');
+        return null; // Skip nếu không tìm thấy tin nhắn
       }
 
-      const readBy = Array.isArray(message.readBy) ? message.readBy : [];
-      if (readBy.includes(readerId)) {
-        return message;
-      }
-
+      // 2. Kiểm tra quyền truy cập tin nhắn
       const hasAccess = await this.checkMessageAccess(message, readerId);
       if (!hasAccess) {
-        throw new ForbiddenException('You do not have access to this message');
+        return null; // Skip nếu không có quyền truy cập
       }
 
+      // 3. Kiểm tra người đọc có phải là người nhận không
+      if (message.messageType === 'USER') {
+        if (message.receiverId !== readerId) {
+          return null; // Skip nếu không phải người nhận
+        }
+      } else if (message.messageType === 'GROUP') {
+        // Kiểm tra người đọc có phải là thành viên nhóm không
+        const isMember = await this.checkGroupMembership(
+          message.groupId,
+          readerId,
+        );
+        if (!isMember) {
+          return null; // Skip nếu không phải thành viên nhóm
+        }
+      }
+
+      // 4. Kiểm tra tin nhắn đã bị thu hồi chưa
+      if (message.recalled) {
+        return null; // Skip nếu tin nhắn đã bị thu hồi
+      }
+
+      // 5. Kiểm tra tin nhắn đã bị xóa chưa
+      if (
+        Array.isArray(message.deletedBy) &&
+        message.deletedBy.includes(readerId)
+      ) {
+        return null; // Skip nếu tin nhắn đã bị xóa
+      }
+
+      // 6. Kiểm tra người dùng đã đọc tin nhắn này chưa
+      const readBy = Array.isArray(message.readBy) ? message.readBy : [];
+      if (readBy.includes(readerId)) {
+        return message; // Đã đọc rồi thì trả về tin nhắn hiện tại
+      }
+
+      // 7. Cập nhật tin nhắn trong transaction để đảm bảo tính nhất quán
       const updatedMessage = await this.prisma.$transaction(async (prisma) => {
+        // Lấy lại tin nhắn để đảm bảo dữ liệu mới nhất
+        const currentMessage = await prisma.message.findUnique({
+          where: { id: messageId },
+          select: { readBy: true },
+        });
+
+        // Kiểm tra lại một lần nữa trong transaction
+        const currentReadBy = Array.isArray(currentMessage.readBy)
+          ? currentMessage.readBy
+          : [];
+        if (currentReadBy.includes(readerId)) {
+          return message; // Đã đọc rồi thì trả về tin nhắn hiện tại
+        }
+
+        // Cập nhật tin nhắn
         return prisma.message.update({
           where: { id: messageId },
           data: {
@@ -621,11 +669,29 @@ export class MessageService {
         });
       });
 
+      // 8. Thông báo qua WebSocket
       this.notifyMessageRead(updatedMessage, readerId);
+
+      // 9. Ghi log để theo dõi
+      console.log(`Message ${messageId} marked as read by user ${readerId}`, {
+        messageType: message.messageType,
+        senderId: message.senderId,
+        receiverId: message.receiverId,
+        groupId: message.groupId,
+        timestamp: new Date().toISOString(),
+      });
+
       return updatedMessage;
     } catch (error) {
-      console.error(`Error in readMessage: ${error.message}`);
-      throw error;
+      // Ghi log lỗi chi tiết nhưng không throw
+      console.error(`Error in readMessage:`, {
+        messageId,
+        readerId,
+        error: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString(),
+      });
+      return null; // Trả về null nếu có lỗi
     }
   }
 
@@ -1172,11 +1238,33 @@ export class MessageService {
     // Calculate pagination
     const skip = (page - 1) * limit;
 
-    // Lấy danh sách tin nhắn trực tiếp (1-1)
+    // Lấy danh sách bạn bè của người dùng
+    const friends = await this.prisma.friend.findMany({
+      where: {
+        OR: [
+          { senderId: userId, status: 'ACCEPTED' },
+          { receiverId: userId, status: 'ACCEPTED' },
+        ],
+      },
+      select: {
+        senderId: true,
+        receiverId: true,
+      },
+    });
+
+    // Tạo danh sách ID của bạn bè
+    const friendIds = friends.map((friend) =>
+      friend.senderId === userId ? friend.receiverId : friend.senderId,
+    );
+
+    // Lấy danh sách tin nhắn trực tiếp (1-1) chỉ từ bạn bè
     console.log('Fetching direct messages for user:', userId);
     const directMessages = await this.prisma.message.findMany({
       where: {
-        OR: [{ senderId: userId }, { receiverId: userId }],
+        OR: [
+          { senderId: userId, receiverId: { in: friendIds } },
+          { senderId: { in: friendIds }, receiverId: userId },
+        ],
         messageType: 'USER',
       },
       orderBy: {
@@ -1197,22 +1285,6 @@ export class MessageService {
     });
 
     console.log(`Found ${directMessages.length} direct messages`);
-    // In ra chi tiết các tin nhắn để kiểm tra
-    directMessages.forEach((msg, index) => {
-      console.log(`Message ${index + 1}:`, {
-        id: msg.id,
-        senderId: msg.senderId,
-        receiverId: msg.receiverId,
-        content: msg.content,
-        messageType: msg.messageType,
-        deletedBy: msg.deletedBy,
-        readBy: msg.readBy,
-        deletedByType: typeof msg.deletedBy,
-        readByType: typeof msg.readBy,
-        isDeletedByArray: Array.isArray(msg.deletedBy),
-        isReadByArray: Array.isArray(msg.readBy),
-      });
-    });
 
     // Lấy danh sách nhóm mà người dùng tham gia
     console.log('Fetching user groups...');
@@ -1287,6 +1359,14 @@ export class MessageService {
         });
         const partnerInfo = partner?.userInfo;
 
+        // Tính số tin nhắn chưa đọc
+        const unreadMessages = directMessages.filter(
+          (msg) =>
+            msg.receiverId === userId &&
+            msg.senderId === partnerId &&
+            !(Array.isArray(msg.readBy) && msg.readBy.includes(userId)),
+        );
+
         directConversationMap.set(partnerId, {
           id: partnerId,
           type: 'USER',
@@ -1309,11 +1389,7 @@ export class MessageService {
                 message.readBy.includes(userId)) ||
               false,
           },
-          unreadCount:
-            message.receiverId === userId &&
-            !(Array.isArray(message.readBy) && message.readBy.includes(userId))
-              ? 1
-              : 0,
+          unreadCount: unreadMessages.length,
           updatedAt: message.createdAt,
         });
       }
@@ -1323,7 +1399,6 @@ export class MessageService {
     const groupConversationMap = new Map();
 
     // Đầu tiên, thêm tất cả các nhóm mà người dùng tham gia vào map
-    // Điều này đảm bảo rằng tất cả các nhóm đều được hiển thị, kể cả khi chưa có tin nhắn
     for (const groupMember of userGroups) {
       const group = groupMember.group;
       if (!group) continue;
@@ -1351,6 +1426,15 @@ export class MessageService {
           };
         });
 
+        // Tính số tin nhắn chưa đọc cho nhóm này
+        const unreadMessages = groupMessages.filter(
+          (msg) =>
+            msg.groupId === group.id &&
+            !(Array.isArray(msg.readBy) && msg.readBy.includes(userId)) &&
+            !(Array.isArray(msg.deletedBy) && msg.deletedBy.includes(userId)) &&
+            !msg.recalled,
+        );
+
         groupConversationMap.set(group.id, {
           id: group.id,
           type: 'GROUP',
@@ -1360,10 +1444,8 @@ export class MessageService {
             avatarUrl: group.avatarUrl,
             members: members,
           },
-          // Không có tin nhắn cuối cùng
           lastMessage: null,
-          unreadCount: 0,
-          // Sử dụng ngày tạo nhóm làm thời gian cập nhật nếu không có tin nhắn
+          unreadCount: unreadMessages.length,
           updatedAt: group.createdAt,
         });
       }
@@ -1398,57 +1480,12 @@ export class MessageService {
 
         // Cập nhật thời gian cập nhật cuộc trò chuyện
         conversation.updatedAt = message.createdAt;
-
-        // Cập nhật số tin nhắn chưa đọc
-        if (
-          !(Array.isArray(message.readBy) && message.readBy.includes(userId))
-        ) {
-          conversation.unreadCount += 1;
-        }
       }
     }
 
     // Kết hợp và sắp xếp tất cả các cuộc trò chuyện theo thời gian tin nhắn cuối cùng
     const directConversations = Array.from(directConversationMap.values());
     const groupConversations = Array.from(groupConversationMap.values());
-
-    // console.log(`Created ${directConversations.length} direct conversations`);
-    // console.log(`Created ${groupConversations.length} group conversations`);
-
-    // In ra chi tiết các cuộc trò chuyện để kiểm tra
-    console.log(
-      'Direct conversation map keys:',
-      Array.from(directConversationMap.keys()),
-    );
-    directConversations.forEach((conv, index) => {
-      console.log(`Direct conversation ${index + 1}:`, {
-        id: conv.id,
-        type: conv.type,
-        user: conv.user,
-        lastMessage: {
-          id: conv.lastMessage?.id,
-          content: conv.lastMessage?.content,
-          senderId: conv.lastMessage?.senderId,
-        },
-      });
-    });
-
-    // In ra chi tiết các cuộc trò chuyện nhóm để kiểm tra
-    groupConversations.forEach((conv, index) => {
-      console.log(`Group conversation ${index + 1}:`, {
-        id: conv.id,
-        type: conv.type,
-        group: conv.group,
-        lastMessage: conv.lastMessage
-          ? {
-              id: conv.lastMessage?.id,
-              content: conv.lastMessage?.content,
-              senderId: conv.lastMessage?.senderId,
-            }
-          : 'No messages',
-        updatedAt: conv.updatedAt,
-      });
-    });
 
     const allConversations = [
       ...directConversations,
@@ -1595,5 +1632,222 @@ export class MessageService {
     }
 
     return results;
+  }
+
+  /**
+   * Đánh dấu tất cả tin nhắn là đã đọc cho một user hoặc group
+   * @param userId ID của người dùng đang đọc tin nhắn
+   * @param targetId ID của người dùng hoặc nhóm cần đánh dấu đã đọc
+   * @param type Loại tin nhắn (USER hoặc GROUP)
+   */
+  async markAllAsRead(
+    userId: string,
+    targetId: string,
+    type: 'USER' | 'GROUP',
+  ) {
+    try {
+      // Tạo điều kiện tìm kiếm tin nhắn chưa đọc
+      const whereClause =
+        type === 'USER'
+          ? {
+              OR: [
+                { senderId: targetId, receiverId: userId },
+                { senderId: userId, receiverId: targetId },
+              ],
+              messageType: 'USER' as const,
+              readBy: {
+                none: userId,
+              },
+              recalled: false,
+            }
+          : {
+              groupId: targetId,
+              messageType: 'GROUP' as const,
+              readBy: {
+                none: userId,
+              },
+              recalled: false,
+            };
+
+      // Log điều kiện tìm kiếm
+      console.log('Search conditions:', JSON.stringify(whereClause, null, 2));
+
+      // Lấy tất cả tin nhắn trước, sau đó filter
+      const allMessages = await this.prisma.message.findMany({
+        where:
+          type === 'USER'
+            ? {
+                OR: [
+                  { senderId: targetId, receiverId: userId },
+                  { senderId: userId, receiverId: targetId },
+                ],
+                messageType: 'USER',
+                recalled: false,
+              }
+            : {
+                groupId: targetId,
+                messageType: 'GROUP',
+                recalled: false,
+              },
+        select: {
+          id: true,
+          content: true,
+          senderId: true,
+          receiverId: true,
+          groupId: true,
+          createdAt: true,
+          readBy: true,
+          deletedBy: true,
+          recalled: true,
+          messageType: true,
+        },
+      });
+
+      // Filter tin nhắn chưa đọc ở application level
+      const unreadMessages = allMessages.filter(
+        (msg) => !msg.readBy.includes(userId),
+      );
+
+      // Log chi tiết về các tin nhắn tìm thấy
+      console.log(
+        'Found messages:',
+        unreadMessages.map((msg) => ({
+          id: msg.id,
+          senderId: msg.senderId,
+          receiverId: msg.receiverId,
+          groupId: msg.groupId,
+          messageType: msg.messageType,
+          readBy: msg.readBy,
+          deletedBy: msg.deletedBy,
+          recalled: msg.recalled,
+          createdAt: msg.createdAt,
+        })),
+      );
+
+      console.log(
+        `Found ${unreadMessages.length} unread messages for ${type} ${targetId}`,
+      );
+
+      if (unreadMessages.length === 0) {
+        // Thử với điều kiện đơn giản hơn để debug
+        const simpleUnreadMessages = await this.prisma.message.findMany({
+          where:
+            type === 'USER'
+              ? {
+                  OR: [
+                    { senderId: targetId, receiverId: userId },
+                    { senderId: userId, receiverId: targetId },
+                  ],
+                  messageType: 'USER',
+                  recalled: false,
+                }
+              : {
+                  groupId: targetId,
+                  messageType: 'GROUP',
+                  recalled: false,
+                },
+          select: {
+            id: true,
+            readBy: true,
+            senderId: true,
+            receiverId: true,
+          },
+        });
+
+        // Lọc tin nhắn chưa đọc ở application level
+        const actualUnreadMessages = simpleUnreadMessages.filter(
+          (msg) => !msg.readBy.includes(userId),
+        );
+
+        console.log(
+          `Debug: Found ${actualUnreadMessages.length} unread messages using simple filter`,
+        );
+
+        if (actualUnreadMessages.length > 0) {
+          // Cập nhật những tin nhắn này
+          const messageIds = actualUnreadMessages.map((msg) => msg.id);
+
+          const updatedMessages = await this.prisma.$transaction(
+            async (prisma) => {
+              const updates = messageIds.map((id) =>
+                prisma.message.update({
+                  where: { id },
+                  data: {
+                    readBy: {
+                      push: userId,
+                    },
+                  },
+                }),
+              );
+
+              return Promise.all(updates);
+            },
+          );
+
+          // Thông báo qua WebSocket
+          if (this.messageGateway) {
+            for (const message of updatedMessages) {
+              this.messageGateway.notifyMessageRead(message, userId);
+            }
+          }
+
+          console.log(
+            `Successfully marked ${updatedMessages.length} messages as read using fallback method`,
+          );
+
+          return {
+            success: true,
+            message: `Marked ${updatedMessages.length} messages as read`,
+            count: updatedMessages.length,
+          };
+        }
+
+        return {
+          success: true,
+          message: 'No unread messages found',
+          count: 0,
+        };
+      }
+
+      // Cập nhật hàng loạt tất cả tin nhắn chưa đọc
+      const messageIds = unreadMessages.map((msg) => msg.id);
+
+      // Sử dụng transaction để đảm bảo tính nhất quán
+      const updatedMessages = await this.prisma.$transaction(async (prisma) => {
+        // Cập nhật từng tin nhắn để đảm bảo readBy được thêm đúng
+        const updates = messageIds.map((id) =>
+          prisma.message.update({
+            where: { id },
+            data: {
+              readBy: {
+                push: userId,
+              },
+            },
+          }),
+        );
+
+        return Promise.all(updates);
+      });
+
+      // Thông báo qua WebSocket cho từng tin nhắn
+      if (this.messageGateway) {
+        for (const message of updatedMessages) {
+          this.messageGateway.notifyMessageRead(message, userId);
+        }
+      }
+
+      console.log(
+        `Successfully marked ${updatedMessages.length} messages as read for ${type} ${targetId}`,
+      );
+
+      return {
+        success: true,
+        message: `Marked ${updatedMessages.length} messages as read`,
+        count: updatedMessages.length,
+      };
+    } catch (error) {
+      console.error(`Error marking messages as read: ${error.message}`);
+      throw error;
+    }
   }
 }
