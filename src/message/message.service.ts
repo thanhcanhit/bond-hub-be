@@ -54,6 +54,119 @@ export class MessageService {
     private readonly eventService?: EventService,
   ) {}
 
+  /**
+   * Kiểm tra quyền truy cập tin nhắn
+   * @param message Tin nhắn cần kiểm tra
+   * @param userId ID của người dùng cần kiểm tra
+   * @returns Promise<boolean> Kết quả kiểm tra
+   */
+  private async checkMessageAccess(
+    message: any,
+    userId: string,
+  ): Promise<boolean> {
+    if (message.messageType === 'USER') {
+      return message.senderId === userId || message.receiverId === userId;
+    } else if (message.messageType === 'GROUP') {
+      const isMember = await this.prisma.groupMember.findFirst({
+        where: {
+          groupId: message.groupId,
+          userId,
+        },
+      });
+      return !!isMember;
+    }
+    return false;
+  }
+
+  /**
+   * Kiểm tra thành viên nhóm
+   * @param groupId ID của nhóm
+   * @param userId ID của người dùng
+   * @returns Promise<boolean> Kết quả kiểm tra
+   */
+  private async checkGroupMembership(
+    groupId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const isMember = await this.prisma.groupMember.findFirst({
+      where: {
+        groupId,
+        userId,
+      },
+    });
+    return !!isMember;
+  }
+
+  /**
+   * Thông báo tin nhắn mới qua WebSocket
+   * @param message Tin nhắn cần thông báo
+   */
+  private notifyNewMessage(message: any) {
+    if (this.messageGateway) {
+      if (message.messageType === 'USER') {
+        this.messageGateway.notifyNewUserMessage(message);
+      } else if (message.messageType === 'GROUP') {
+        this.messageGateway.notifyNewGroupMessage(message);
+      }
+    }
+
+    if (this.eventService) {
+      this.eventService.emitMessageCreated(message);
+    }
+  }
+
+  /**
+   * Thông báo tin nhắn đã đọc qua WebSocket
+   * @param message Tin nhắn đã đọc
+   * @param userId ID của người đọc
+   */
+  private notifyMessageRead(message: any, userId: string) {
+    if (this.messageGateway) {
+      this.messageGateway.notifyMessageRead(message, userId);
+    }
+
+    if (this.eventService) {
+      this.eventService.emitMessageRead(message.id, userId);
+    }
+  }
+
+  /**
+   * Thông báo tin nhắn đã thu hồi qua WebSocket
+   * @param message Tin nhắn đã thu hồi
+   * @param userId ID của người thu hồi
+   */
+  private notifyMessageRecalled(message: any, userId: string) {
+    if (this.messageGateway) {
+      this.messageGateway.notifyMessageRecalled(message, userId);
+    }
+
+    if (this.eventService) {
+      this.eventService.emitMessageRecalled(message.id, userId);
+    }
+  }
+
+  /**
+   * Thông báo cập nhật phản ứng tin nhắn qua WebSocket
+   * @param message Tin nhắn đã cập nhật phản ứng
+   * @param userId ID của người thêm/xóa phản ứng
+   */
+  private notifyMessageReactionUpdated(message: any, userId: string) {
+    if (this.messageGateway) {
+      this.messageGateway.notifyMessageReactionUpdated(message, userId);
+    }
+  }
+
+  /**
+   * Thông báo tin nhắn đã xóa qua WebSocket
+   * @param message Tin nhắn đã xóa
+   * @param userId ID của người xóa
+   */
+  private notifyMessageDeleted(message: any, userId: string) {
+    if (this.messageGateway) {
+      this.messageGateway.notifyMessageDeleted(message, userId);
+    }
+  }
+
   async createUserMessage(message: UserMessageDto, userId: string) {
     // Validation: ensure the sender is the authenticated user
     if (message.senderId && message.senderId !== userId) {
@@ -462,9 +575,7 @@ export class MessageService {
   }
 
   async recallMessage(messageId: string, userId: string) {
-    // Check if the user is the sender of the message
     const message = await this.findMessageById(messageId);
-
     if (!message) {
       throw new ForbiddenException('Message not found');
     }
@@ -474,103 +585,43 @@ export class MessageService {
     }
 
     const updatedMessage = await this.prisma.message.update({
-      where: {
-        id: messageId,
-      },
-      data: {
-        recalled: true,
-      },
+      where: { id: messageId },
+      data: { recalled: true },
     });
 
-    // Thông báo qua WebSocket nếu có gateway
-    if (this.messageGateway) {
-      this.messageGateway.notifyMessageRecalled(updatedMessage, userId);
-    }
-
-    // Phát sự kiện tin nhắn đã được thu hồi
-    if (this.eventService) {
-      this.eventService.emitMessageRecalled(messageId, userId);
-    }
-
+    this.notifyMessageRecalled(updatedMessage, userId);
     return updatedMessage;
   }
 
   async readMessage(messageId: string, readerId: string) {
     try {
-      // Verify the message exists and user has access to it
       const message = await this.findMessageById(messageId);
-
       if (!message) {
         throw new ForbiddenException('Message not found');
       }
 
-      // Kiểm tra nếu người dùng đã đọc tin nhắn này rồi
       const readBy = Array.isArray(message.readBy) ? message.readBy : [];
       if (readBy.includes(readerId)) {
-        // Đã đọc rồi, trả về tin nhắn hiện tại mà không cần cập nhật
         return message;
       }
 
-      // Kiểm tra quyền truy cập
-      let hasAccess = false;
-
-      // For user messages, check if user is sender or receiver
-      if (message.messageType === 'USER') {
-        hasAccess =
-          message.senderId === readerId || message.receiverId === readerId;
-      }
-      // For group messages, check if user is a member of the group
-      else if (message.messageType === 'GROUP') {
-        const isMember = await this.prisma.groupMember.findFirst({
-          where: {
-            groupId: message.groupId,
-            userId: readerId,
-          },
-        });
-        hasAccess = !!isMember;
-      }
-
+      const hasAccess = await this.checkMessageAccess(message, readerId);
       if (!hasAccess) {
         throw new ForbiddenException('You do not have access to this message');
       }
 
-      // Cập nhật tin nhắn với transaction để đảm bảo tính nhất quán
       const updatedMessage = await this.prisma.$transaction(async (prisma) => {
-        // Cập nhật tin nhắn
-        const updated = await prisma.message.update({
-          where: {
-            id: messageId,
-          },
+        return prisma.message.update({
+          where: { id: messageId },
           data: {
             readBy: {
               push: readerId,
             },
           },
         });
-
-        return updated;
       });
 
-      // Thông báo qua WebSocket nếu có gateway
-      if (this.messageGateway) {
-        try {
-          this.messageGateway.notifyMessageRead(updatedMessage, readerId);
-        } catch (error) {
-          console.error(`Error notifying message read: ${error.message}`);
-          // Không throw lỗi ở đây để không ảnh hưởng đến response
-        }
-      }
-
-      // Phát sự kiện tin nhắn đã được đọc
-      if (this.eventService) {
-        try {
-          this.eventService.emitMessageRead(messageId, readerId);
-        } catch (error) {
-          console.error(`Error emitting message read event: ${error.message}`);
-          // Không throw lỗi ở đây để không ảnh hưởng đến response
-        }
-      }
-
+      this.notifyMessageRead(updatedMessage, readerId);
       return updatedMessage;
     } catch (error) {
       console.error(`Error in readMessage: ${error.message}`);
@@ -646,49 +697,22 @@ export class MessageService {
   }
 
   async addReaction(reaction: CreateReactionDto, userId: string) {
-    // Set the user ID in the reaction object
     reaction.userId = userId;
-
-    // Verify the message exists and user has access to it
     const message = await this.findMessageById(reaction.messageId);
-
     if (!message) {
       throw new ForbiddenException('Message not found');
     }
 
-    // For user messages, check if user is sender or receiver
-    if (
-      message.messageType === 'USER' &&
-      message.senderId !== userId &&
-      message.receiverId !== userId
-    ) {
+    const hasAccess = await this.checkMessageAccess(message, userId);
+    if (!hasAccess) {
       throw new ForbiddenException('You do not have access to this message');
     }
 
-    // For group messages, check if user is a member of the group
-    if (message.messageType === 'GROUP') {
-      const isMember = await this.prisma.groupMember.findFirst({
-        where: {
-          groupId: message.groupId,
-          userId,
-        },
-      });
-
-      if (!isMember) {
-        throw new ForbiddenException('You are not a member of this group');
-      }
-    }
-
     const messageReactions = await this.prisma.message.findUnique({
-      where: {
-        id: reaction.messageId,
-      },
-      select: {
-        reactions: true,
-      },
+      where: { id: reaction.messageId },
+      select: { reactions: true },
     });
 
-    // Ensure reactions is an array
     const reactions = Array.isArray(messageReactions.reactions)
       ? messageReactions.reactions
       : [];
@@ -697,56 +721,34 @@ export class MessageService {
       (r: MessageReaction) => r.userId === userId,
     );
 
+    let updatedMessage;
     if (existsReaction) {
-      const updatedMessage = await this.prisma.message.update({
-        where: {
-          id: reaction.messageId,
-        },
+      updatedMessage = await this.prisma.message.update({
+        where: { id: reaction.messageId },
         data: {
           reactions: {
             set: reactions.map((r: MessageReaction) =>
-              r.userId === userId
-                ? {
-                    ...r,
-                    count: r.count + 1,
-                  }
-                : r,
+              r.userId === userId ? { ...r, count: r.count + 1 } : r,
             ),
           },
         },
       });
-
-      // Thông báo qua WebSocket nếu có gateway
-      if (this.messageGateway) {
-        this.messageGateway.notifyMessageReactionUpdated(
-          updatedMessage,
-          userId,
-        );
-      }
-
-      return updatedMessage;
-    }
-
-    const updatedMessage = await this.prisma.message.update({
-      where: {
-        id: reaction.messageId,
-      },
-      data: {
-        reactions: {
-          push: {
-            userId,
-            reaction: reaction.reaction,
-            count: 1,
+    } else {
+      updatedMessage = await this.prisma.message.update({
+        where: { id: reaction.messageId },
+        data: {
+          reactions: {
+            push: {
+              userId,
+              reaction: reaction.reaction,
+              count: 1,
+            },
           },
         },
-      },
-    });
-
-    // Thông báo qua WebSocket nếu có gateway
-    if (this.messageGateway) {
-      this.messageGateway.notifyMessageReactionUpdated(updatedMessage, userId);
+      });
     }
 
+    this.notifyMessageReactionUpdated(updatedMessage, userId);
     return updatedMessage;
   }
 

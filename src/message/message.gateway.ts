@@ -309,16 +309,30 @@ export class MessageGateway
 
     if (this.server) {
       try {
+        this.logger.debug(`[Message Event] Sending user message:`, {
+          messageId: message.id,
+          senderId: message.senderId,
+          receiverId: message.receiverId,
+          content: message.content,
+          timestamp: eventData.timestamp,
+        });
+
         // Phát sự kiện đến người gửi
         this.server
           .to(`user:${message.senderId}`)
           .emit('newMessage', eventData);
+        this.logger.debug(
+          `[Message Event] Message sent to sender: ${message.senderId}`,
+        );
 
         // Phát sự kiện đến người nhận
         if (message.receiverId) {
           this.server
             .to(`user:${message.receiverId}`)
             .emit('newMessage', eventData);
+          this.logger.debug(
+            `[Message Event] Message sent to receiver: ${message.receiverId}`,
+          );
 
           // Phát sự kiện dừng nhập
           this.server
@@ -327,13 +341,22 @@ export class MessageGateway
               userId: message.senderId,
               timestamp: new Date(),
             });
+          this.logger.debug(
+            `[Message Event] Typing stopped notification sent to: ${message.receiverId}`,
+          );
         }
       } catch (error) {
-        this.logger.error(`Error sending user message event: ${error.message}`);
+        this.logger.error(`[Message Event] Error sending user message event:`, {
+          error: error.message,
+          messageId: message.id,
+          senderId: message.senderId,
+          receiverId: message.receiverId,
+        });
       }
     } else {
       this.logger.warn(
-        'Socket.IO server not initialized yet, cannot send user message',
+        '[Message Event] Socket.IO server not initialized yet, cannot send user message',
+        { messageId: message.id },
       );
     }
   }
@@ -357,29 +380,48 @@ export class MessageGateway
     };
 
     // Phát sự kiện đến phòng nhóm
-    if (message.groupId) {
-      if (this.server) {
-        try {
-          this.server
-            .to(`group:${message.groupId}`)
-            .emit('newMessage', eventData);
+    if (message.groupId && this.server) {
+      try {
+        this.logger.debug(`[Message Event] Sending group message:`, {
+          messageId: message.id,
+          senderId: message.senderId,
+          groupId: message.groupId,
+          content: message.content,
+          timestamp: eventData.timestamp,
+        });
 
-          // Phát sự kiện dừng nhập
-          this.server.to(`group:${message.groupId}`).emit('userTypingStopped', {
-            userId: message.senderId,
+        this.server
+          .to(`group:${message.groupId}`)
+          .emit('newMessage', eventData);
+        this.logger.debug(
+          `[Message Event] Message sent to group: ${message.groupId}`,
+        );
+
+        // Phát sự kiện dừng nhập
+        this.server.to(`group:${message.groupId}`).emit('userTypingStopped', {
+          userId: message.senderId,
+          groupId: message.groupId,
+          timestamp: new Date(),
+        });
+        this.logger.debug(
+          `[Message Event] Typing stopped notification sent to group: ${message.groupId}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `[Message Event] Error sending group message event:`,
+          {
+            error: error.message,
+            messageId: message.id,
+            senderId: message.senderId,
             groupId: message.groupId,
-            timestamp: new Date(),
-          });
-        } catch (error) {
-          this.logger.error(
-            `Error sending group message event: ${error.message}`,
-          );
-        }
-      } else {
-        this.logger.warn(
-          'Socket.IO server not initialized yet, cannot send group message',
+          },
         );
       }
+    } else {
+      this.logger.warn(
+        '[Message Event] Socket.IO server not initialized yet, cannot send group message',
+        { messageId: message.id, groupId: message.groupId },
+      );
     }
   }
 
