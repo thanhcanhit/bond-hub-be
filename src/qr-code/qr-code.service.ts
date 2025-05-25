@@ -45,7 +45,6 @@ export class QrCodeService {
       throw new BadRequestException('QR Code has already been used');
     }
 
-    console.log('User id', userId);
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { userInfo: true },
@@ -56,22 +55,14 @@ export class QrCodeService {
     }
 
     // Make sure we're using the qrToken from the validated qrCode object
-    console.log(
-      'Updating QR code status to SCANNED for token:',
-      qrCode.qrToken,
-    );
     try {
       const updatedQrCode = await this.prisma.qrCode.update({
         where: { id: qrCode.id },
         data: { status: QrCodeStatus.SCANNED, userId },
       });
-      console.log('QR code updated successfully:', updatedQrCode);
     } catch (error) {
       console.error('Error updating QR code status:', error);
-      throw new Error(`Failed to update QR code status: ${error.message}`);
     }
-
-    console.log('SCANNED: User info', user.userInfo);
 
     const userData = {
       id: user.id,
@@ -123,18 +114,12 @@ export class QrCodeService {
       type: 'WEB',
     };
 
-    console.log(
-      'Updating QR code status to CONFIRMED for token:',
-      qrCode.qrToken,
-    );
     try {
       const updatedQrCode = await this.prisma.qrCode.update({
         where: { id: qrCode.id },
         data: { status: QrCodeStatus.CONFIRMED },
       });
-      console.log('QR code updated successfully to CONFIRMED:', updatedQrCode);
     } catch (error) {
-      console.error('Error updating QR code status to CONFIRMED:', error);
       throw new Error(
         `Failed to update QR code status to CONFIRMED: ${error.message}`,
       );
@@ -167,18 +152,12 @@ export class QrCodeService {
   async cancelQrCode(qrToken: string) {
     const qrCode = await this.findAndValidateQrCode(qrToken);
 
-    console.log(
-      'Updating QR code status to CANCELLED for token:',
-      qrCode.qrToken,
-    );
     try {
       const updatedQrCode = await this.prisma.qrCode.update({
         where: { id: qrCode.id },
         data: { status: QrCodeStatus.CANCELLED },
       });
-      console.log('QR code updated successfully to CANCELLED:', updatedQrCode);
     } catch (error) {
-      console.error('Error updating QR code status to CANCELLED:', error);
       throw new Error(
         `Failed to update QR code status to CANCELLED: ${error.message}`,
       );
@@ -191,8 +170,6 @@ export class QrCodeService {
   }
 
   private async findAndValidateQrCode(qrToken: string) {
-    console.log('Searching for QR token:', qrToken); // Debug log
-
     // Check if qrToken is undefined or empty
     if (!qrToken) {
       throw new BadRequestException('QR token is required');
@@ -205,8 +182,6 @@ export class QrCodeService {
           qrToken: qrToken,
         },
       });
-
-      console.log('Found QR code:', qrCode); // Debug log
 
       if (!qrCode) {
         throw new NotFoundException('QR Code not found');
@@ -231,8 +206,6 @@ export class QrCodeService {
   }
 
   private async deleteQrCode(qrToken: string) {
-    console.log('Attempting to delete QR code with token:', qrToken);
-
     if (!qrToken) {
       console.warn('Attempted to delete QR code with undefined token');
       return;
@@ -256,7 +229,6 @@ export class QrCodeService {
       const deletedQrCode = await this.prisma.qrCode.delete({
         where: { id: qrCode.id },
       });
-      console.log('Successfully deleted QR code:', deletedQrCode);
     } catch (error) {
       console.error('Error deleting QR code:', error);
       // Don't throw the error as this is a cleanup operation

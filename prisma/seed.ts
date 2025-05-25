@@ -19,8 +19,6 @@ async function main() {
 
   // Tạo cài đặt người dùng
   await createUserSettings(users);
-
-  console.log('Seed data đã được tạo thành công!');
 }
 
 async function createUsers() {
