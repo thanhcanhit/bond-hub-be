@@ -47,7 +47,7 @@ async function createUsers() {
     {
       id: 'a1a0ae5b-070f-40c2-a07d-c61c06623e7a',
       email: 'iamhoangkhang@icloud.com',
-      phoneNumber: '0383741660',
+      // phoneNumber: '0383741660',
       fullName: 'Lê Hoàng Khang',
       dateOfBirth: new Date('2003-03-02'),
       gender: Gender.MALE,
