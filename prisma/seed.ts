@@ -3,6 +3,30 @@ import { hash } from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+// xóa dữ liệu hiện có
+async function deleteAllData() {
+  await prisma.userSetting.deleteMany({});
+  await prisma.refreshToken.deleteMany({});
+  await prisma.notification.deleteMany({});
+  await prisma.message.deleteMany({});
+  await prisma.comment.deleteMany({});
+  await prisma.postReaction.deleteMany({});
+  await prisma.hiddenPost.deleteMany({});
+  await prisma.post.deleteMany({});
+  await prisma.story.deleteMany({});
+  await prisma.cloudStorage.deleteMany({});
+  await prisma.contact.deleteMany({});
+  await prisma.friend.deleteMany({});
+  await prisma.groupMember.deleteMany({});
+  await prisma.group.deleteMany({});
+  await prisma.qrCode.deleteMany({});
+  await prisma.pinnedItem.deleteMany({});
+  await prisma.userInfo.deleteMany({});
+  await prisma.user.deleteMany({});
+
+  console.log('Dữ liệu đã được xóa thành công!');
+}
+
 // Hàm tạo ngày hết hạn sau một số ngày
 function addDays(date: Date, days: number): Date {
   const result = new Date(date);
